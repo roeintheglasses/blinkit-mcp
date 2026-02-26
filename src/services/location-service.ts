@@ -50,6 +50,13 @@ export class LocationService {
       throw new Error(result.error ?? "Failed to select address");
     }
 
-    return `Address at index ${index} selected`;
+    const data = result.data as {
+      selected: boolean;
+      payment_ready?: boolean;
+      hint?: string;
+      skipped_steps?: string[];
+    };
+
+    return data.hint ?? `Address at index ${index} selected`;
   }
 }

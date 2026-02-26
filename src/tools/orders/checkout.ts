@@ -4,7 +4,7 @@ import { OrderService } from "../../services/order-service.ts";
 
 export const checkoutTool = {
   name: "checkout",
-  description: "Proceed to checkout. Clicks the Proceed/Checkout button. Triggers address selection if needed.",
+  description: "Proceed to checkout from cart. Returns next_step hint: 'select_address' if address selection needed, 'payment' if ready for payment. Automatically navigates past intermediate screens (delivery tip, etc.).",
   inputSchema: {},
   handler: async (_input: {}, ctx: AppContext) => {
     if (!ctx.sessionManager.isAuthenticated()) {

@@ -4,7 +4,7 @@ import { LocationService } from "../../services/location-service.ts";
 
 export const selectAddressTool = {
   name: "select_address",
-  description: "Select a saved address for Blinkit delivery by its index. Use get_saved_addresses to see available addresses.",
+  description: "Select a delivery address during checkout by index. Automatically navigates through intermediate steps (tip selection, proceed to pay) toward the payment page. Use get_saved_addresses to see available addresses.",
   inputSchema: {
     address_index: z.number().int().min(0),
   },

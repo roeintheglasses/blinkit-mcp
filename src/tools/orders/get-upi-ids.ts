@@ -4,7 +4,7 @@ import { PaymentService } from "../../services/payment-service.ts";
 
 export const getUpiIdsTool = {
   name: "get_upi_ids",
-  description: "Get list of available/saved UPI IDs from the payment page. Use after checkout.",
+  description: "Get available UPI IDs from the payment page. Automatically navigates past intermediate screens (tip selection, etc.) if needed. Use after checkout and address selection.",
   inputSchema: {},
   handler: async (_input: {}, ctx: AppContext) => {
     if (!ctx.sessionManager.isAuthenticated()) {

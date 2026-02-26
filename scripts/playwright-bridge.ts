@@ -102,6 +102,80 @@ async function saveStorageState(): Promise<void> {
   }
 }
 
+/** Navigate through intermediate checkout screens (tip, proceed to pay, etc.) until payment widget appears */
+async function navigateToPaymentWidget(p: Page, timeoutMs = 20000): Promise<{
+  reached: boolean;
+  skippedSteps: string[];
+}> {
+  const skippedSteps: string[] = [];
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    // Check if payment widget is already present
+    if (await p.locator("#payment_widget").count() > 0) {
+      return { reached: true, skippedSteps };
+    }
+
+    // Check for delivery tip screen
+    const tipSection = p.locator("text=/[Dd]elivery [Tt]ip/, text=/[Aa]dd [Tt]ip/, text=/[Tt]ip your delivery/");
+    if (await tipSection.count() > 0) {
+      log("Detected delivery tip screen. Looking for skip/proceed option...");
+      // Try "No tip" or "Skip" first
+      const noTip = p.locator("text=/[Nn]o [Tt]ip/, text=/[Ss]kip/");
+      if (await noTip.count() > 0) {
+        await noTip.first().click();
+        skippedSteps.push("delivery_tip_skipped");
+        await p.waitForTimeout(1000);
+        continue;
+      }
+      // Fallback: look for Proceed/Continue button
+      const proceedBtn = p.locator("button, div").filter({ hasText: /Proceed|Continue|Next/ }).last();
+      if (await proceedBtn.isVisible().catch(() => false)) {
+        await proceedBtn.click();
+        skippedSteps.push("delivery_tip_proceeded");
+        await p.waitForTimeout(1000);
+        continue;
+      }
+    }
+
+    // Check for "Proceed to Pay" / "Proceed to Payment" button
+    const proceedToPay = p.locator(
+      "button:has-text('Proceed to Pay'), div:has-text('Proceed to Pay'), " +
+      "button:has-text('Proceed to Payment'), button:has-text('Continue to Payment')"
+    );
+    if (await proceedToPay.count() > 0 && await proceedToPay.last().isVisible().catch(() => false)) {
+      await proceedToPay.last().click();
+      skippedSteps.push("proceed_to_pay_clicked");
+      log("Clicked 'Proceed to Pay'");
+      await p.waitForTimeout(2000);
+      continue;
+    }
+
+    // Check for generic "Proceed" or "Continue" button (fallback)
+    const genericProceed = p.locator("button, div").filter({ hasText: /^Proceed$|^Continue$|^Next$/ }).last();
+    if (await genericProceed.isVisible().catch(() => false)) {
+      await genericProceed.click();
+      skippedSteps.push("generic_proceed_clicked");
+      log("Clicked generic Proceed/Continue button");
+      await p.waitForTimeout(1500);
+      continue;
+    }
+
+    // Check for dismissible overlays/modals
+    const closeBtn = p.locator("button[aria-label='close'], button[aria-label='Close'], div[class*='close']");
+    if (await closeBtn.count() > 0 && await closeBtn.first().isVisible().catch(() => false)) {
+      await closeBtn.first().click();
+      skippedSteps.push("modal_dismissed");
+      await p.waitForTimeout(500);
+      continue;
+    }
+
+    await p.waitForTimeout(500);
+  }
+
+  return { reached: false, skippedSteps };
+}
+
 /** Check if user is logged in by looking at UI state */
 async function checkLoggedIn(p: Page): Promise<boolean> {
   try {
@@ -1237,13 +1311,30 @@ async function handleCommand(command: BridgeCommand): Promise<void> {
         }
 
         const items = p.locator("div[class*='AddressList__AddressItemWrapper']");
-        if (index < await items.count()) {
-          await items.nth(index).click();
-          await p.waitForTimeout(2000);
-          respond({ id, success: true, data: { selected: true } });
-        } else {
+        if (index >= await items.count()) {
           respond({ id, success: false, error: `Invalid address index: ${index}` });
+          break;
         }
+
+        await items.nth(index).click();
+        log(`Clicked address at index ${index}. Navigating through intermediate steps...`);
+        await p.waitForTimeout(1500);
+
+        // Navigate through any intermediate screens (tip, proceed to pay, etc.)
+        const navResult = await navigateToPaymentWidget(p, 15000);
+
+        respond({
+          id,
+          success: true,
+          data: {
+            selected: true,
+            payment_ready: navResult.reached,
+            skipped_steps: navResult.skippedSteps,
+            hint: navResult.reached
+              ? "Address selected and payment page reached. Use get_upi_ids to see payment options."
+              : "Address selected but payment page not yet reached. There may be additional steps on screen.",
+          },
+        });
         break;
       }
 
@@ -1275,13 +1366,32 @@ async function handleCommand(command: BridgeCommand): Promise<void> {
           // Try clicking Proceed
           if (await proceedBtn.isVisible().catch(() => false)) {
             await proceedBtn.click();
-            log("Cart checkout initiated. Address selection or payment should follow.");
+            log("Cart checkout initiated.");
             await p.waitForTimeout(3000);
-            respond({
-              id,
-              success: true,
-              data: { message: "Checkout initiated. Select address or proceed to payment." },
-            });
+
+            // Detect what state we landed in
+            const state: Record<string, unknown> = {};
+
+            if (await p.isVisible("text='Select delivery address'").catch(() => false)) {
+              state.next_step = "select_address";
+              state.message = "Checkout initiated. Address selection is showing. Use get_saved_addresses then select_address.";
+            } else if (await p.locator("#payment_widget").count() > 0) {
+              state.next_step = "payment";
+              state.message = "Checkout initiated. Payment page is ready. Use get_upi_ids.";
+            } else {
+              // Try navigating through intermediate screens
+              const navResult = await navigateToPaymentWidget(p, 10000);
+              if (navResult.reached) {
+                state.next_step = "payment";
+                state.message = "Checkout initiated. Payment page is ready. Use get_upi_ids.";
+                state.skipped_steps = navResult.skippedSteps;
+              } else {
+                state.next_step = "unknown";
+                state.message = "Checkout initiated. Check page state — you may need get_saved_addresses or get_upi_ids.";
+              }
+            }
+
+            respond({ id, success: true, data: state });
           } else {
             respond({ id, success: false, error: "Proceed button not visible. Cart might be empty or store unavailable." });
           }
@@ -1296,9 +1406,27 @@ async function handleCommand(command: BridgeCommand): Promise<void> {
         log("Getting available UPI IDs...");
 
         try {
-          const iframeElement = await p.waitForSelector("#payment_widget", { timeout: 30000 });
+          // Check if payment widget is already present
+          let hasWidget = await p.locator("#payment_widget").count() > 0;
+
+          // If not, try navigating through any intermediate screens first
+          if (!hasWidget) {
+            log("Payment widget not immediately visible. Checking for intermediate screens...");
+            const navResult = await navigateToPaymentWidget(p, 15000);
+            if (navResult.skippedSteps.length > 0) {
+              log(`Navigated through: ${navResult.skippedSteps.join(", ")}`);
+            }
+            hasWidget = navResult.reached;
+          }
+
+          // Now wait for the iframe
+          const iframeElement = await p.waitForSelector("#payment_widget", { timeout: 20000 });
           if (!iframeElement) {
-            respond({ id, success: true, data: { upi_ids: [] } });
+            respond({
+              id,
+              success: true,
+              data: { upi_ids: [], hint: "Payment widget not found. Make sure checkout and address selection are complete." },
+            });
             break;
           }
 
@@ -1413,7 +1541,7 @@ async function handleCommand(command: BridgeCommand): Promise<void> {
           }
 
           // Strategy 3: Check inside iframe
-          const iframeElement = await p.querySelector("#payment_widget");
+          const iframeElement = await p.waitForSelector("#payment_widget", { timeout: 5000 }).catch(() => null);
           if (iframeElement) {
             const frame = await iframeElement.contentFrame();
             if (frame) {
