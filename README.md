@@ -2,7 +2,7 @@
 
 An MCP (Model Context Protocol) server that wraps [blinkit.com](https://blinkit.com/) -- India's quick-commerce grocery delivery platform -- enabling AI assistants to search products, manage cart, and place orders.
 
-Blinkit has no public API. This server uses a hybrid approach: direct HTTP calls where possible, and Playwright browser automation as a fallback. Playwright runs in a separate subprocess (via `tsx`) to isolate browser automation from the main MCP server process.
+Blinkit has no public API. This server uses a hybrid approach: direct HTTP calls where possible, and Playwright browser automation as a fallback. Playwright runs in-process, managed by the BrowserManager class.
 
 ## Features
 
@@ -35,7 +35,7 @@ Blinkit has no public API. This server uses a hybrid approach: direct HTTP calls
    pnpm install
    ```
 
-3. Install Playwright with Firefox (the bridge uses Firefox):
+3. Install Playwright with Firefox:
 
    ```bash
    npx playwright install firefox
@@ -111,7 +111,6 @@ Configuration is loaded from `~/.blinkit-mcp/config.json`. Environment variables
 | `headless` | `boolean` | `true` | Run the Playwright browser in headless mode. Set to `false` to see the browser window. |
 | `debug` | `boolean` | `false` | Enable debug logging. Also forces headed mode and applies `slow_mo`. |
 | `slow_mo` | `number` | `0` | Milliseconds to slow down each Playwright action. Useful for debugging. Defaults to 500 when `debug` is `true`. |
-| `playwright_mode` | `"bridge"` or `"direct"` | `"bridge"` | Playwright execution mode. `bridge` runs Playwright in a Node.js subprocess (recommended). `direct` runs it in-process. |
 
 ### Environment Variables
 
@@ -124,7 +123,6 @@ Configuration is loaded from `~/.blinkit-mcp/config.json`. Environment variables
 | `BLINKIT_HEADLESS` | `headless` (set to `"false"` to disable) |
 | `BLINKIT_DEBUG` | `debug` (set to `"true"` to enable) |
 | `BLINKIT_SLOW_MO` | `slow_mo` |
-| `BLINKIT_PLAYWRIGHT_MODE` | `playwright_mode` |
 
 ## Available Tools
 
@@ -188,11 +186,9 @@ Blinkit does not expose a public API. This server takes a two-pronged approach:
 
 Each tool can have either an HTTP or Playwright implementation. The architecture is designed so individual tools can be migrated from Playwright to direct HTTP as endpoints are discovered.
 
-### Playwright Bridge
+### In-Process Playwright
 
-Browser automation runs in a **separate Node.js subprocess** (`scripts/playwright-bridge.ts`) executed via `tsx`. This isolates Playwright from the main MCP server process. The server communicates with this subprocess over stdin/stdout using a JSON command-response protocol.
-
-The bridge process is started on demand, includes health checks, and automatically restarts if it crashes.
+Browser automation runs in-process. The `BrowserManager` class (`src/core/browser-manager.ts`) directly manages the Playwright Browser, BrowserContext, and Page instances. Flow modules in `src/playwright/` contain the browser automation logic as plain async functions. Services call these functions directly -- no subprocess, no IPC, no serialization overhead.
 
 ### Layer Diagram
 
@@ -213,17 +209,17 @@ Services  Services
    |         |
 HTTP Client  Browser Manager
    |              |
-Blinkit API   Playwright Bridge (Node.js subprocess)
+Blinkit API   Playwright Flow Modules
                   |
               Firefox Browser
 ```
 
 **Layers:**
 
-- **Tools** -- MCP tool definitions with input schemas and handlers. Thin wrappers that delegate to services.
-- **Services** -- Business logic (AuthService, ProductService, CartService, OrderService, PaymentService, LocationService, SpendingGuard).
-- **Core** -- Infrastructure components (BlinkitHttpClient, BrowserManager, SessionManager, RateLimiter, Logger).
-- **Bridge** -- The Playwright subprocess that receives JSON commands and drives the browser.
+- **MCP Tools Layer** (`src/tools/`) -- MCP tool definitions with input schemas and handlers. Thin wrappers that delegate to services.
+- **Service Layer** (`src/services/`) -- Business logic. HTTP-first, Playwright fallback. (AuthService, ProductService, CartService, OrderService, PaymentService, LocationService, SpendingGuard).
+- **Core Layer** (`src/core/`) -- Infrastructure components (BrowserManager, BlinkitHttpClient, SessionManager, RateLimiter, Logger).
+- **Playwright Flow Modules** (`src/playwright/`) -- Browser automation functions that operate on a Playwright Page and return typed results.
 
 ### Session Persistence
 
@@ -287,15 +283,14 @@ Blinkit inventory is hyper-local. Each dark store serves a small geographic area
 
 - Ensure the phone number is a valid 10-digit Indian mobile number (starting with 6-9).
 - Wait at least 30 seconds before retrying. Blinkit may rate-limit OTP requests.
-- The Playwright bridge has a 60-second timeout for commands. If login takes longer, the bridge will time out and the command will need to be retried.
+- Playwright operations have a 60-second timeout. If login takes longer, the operation will time out and the command will need to be retried.
 
-### Playwright bridge crashes or fails to start
+### Playwright browser fails to launch
 
 - Confirm Node.js v18+ is installed and available on your `PATH`.
 - Confirm Firefox is installed for Playwright: run `npx playwright install firefox`.
 - Check that `tsx` is available (it is installed as a dev dependency).
 - Set `debug` to `true` in your config to see the browser window and get verbose logs.
-- If the bridge crashes mid-session, the server will automatically restart it on the next command.
 
 ### Rate limiting
 

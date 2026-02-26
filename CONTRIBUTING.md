@@ -7,7 +7,7 @@ This guide covers everything you need to contribute to the blinkit-mcp project: 
 - [Getting Started](#getting-started)
 - [Architecture Overview](#architecture-overview)
 - [Adding a New Tool](#adding-a-new-tool)
-- [Bridge Command Protocol](#bridge-command-protocol)
+- [Flow Modules](#flow-modules)
 - [Updating Selectors](#updating-selectors)
 - [Testing](#testing)
 - [Code Style](#code-style)
@@ -61,14 +61,14 @@ MCP Client (Claude, etc.)
     |
     v
 +--------------------------+
-| Tools Layer              |  src/tools/<category>/*.ts
+| MCP Tools Layer          |  src/tools/<category>/*.ts
 | Zod validation, MCP      |
 | response formatting       |
 +--------------------------+
     |
     v
 +--------------------------+
-| Services Layer           |  src/services/*.ts
+| Service Layer            |  src/services/*.ts
 | Business logic, decides   |
 | HTTP vs Playwright        |
 +--------------------------+
@@ -81,14 +81,15 @@ MCP Client (Claude, etc.)
   src/core/     src/core/
   http-client   browser-manager
     |                |
-    v                | JSON-over-stdio IPC
-  Blinkit API        v
-               +---------------------+
-               | Playwright Bridge   |
-               | (separate Node.js   |
-               |  process)           |
-               +---------------------+
-                 scripts/playwright-bridge.ts
+    v                v
+  Blinkit API   +---------------------+
+                | Playwright Flow     |
+                | Modules (in-process)|
+                +---------------------+
+                  src/playwright/*.ts
+                       |
+                       v
+                  Firefox Browser
 ```
 
 ### Layer 1: Tools (`src/tools/`)
@@ -126,20 +127,29 @@ Current services:
 Low-level infrastructure shared across all services:
 
 - `http-client.ts` -- typed HTTP client for Blinkit's REST API
-- `browser-manager.ts` -- spawns and communicates with the Playwright bridge process
+- `browser-manager.ts` -- manages the Playwright Browser, BrowserContext, and Page lifecycle in-process
 - `session-manager.ts` -- tracks authentication state, phone number, and location coordinates
 - `rate-limiter.ts` -- token-bucket rate limiter to prevent API abuse
 - `logger.ts` -- structured logging to stderr (never stdout)
 
-### Layer 4: Playwright Bridge (`scripts/playwright-bridge.ts`)
+### Layer 4: Playwright Flow Modules (`src/playwright/`)
 
-A standalone subprocess that runs Playwright. The main MCP server communicates with it via JSON messages over stdin/stdout.
+Playwright runs in-process via flow modules. Each module exports plain async functions that accept a Playwright `Page` (and any required parameters) and return typed results. Services obtain a page by calling `browserManager.ensurePage()` and pass it directly to flow functions.
 
-**Why a separate process?** Running the Playwright bridge as a separate subprocess (via `tsx`) isolates browser automation from the main MCP server process. The `BrowserManager` class in `src/core/browser-manager.ts` handles spawning, health-checking, and communicating with this process.
+Flow modules:
+
+| Module | Purpose |
+|---|---|
+| `helpers.ts` | Shared Playwright utilities (waiting, element queries, debug highlighting) |
+| `auth-flow.ts` | Login and OTP entry flows |
+| `search-flow.ts` | Product search and category browsing |
+| `cart-flow.ts` | Cart manipulation (add, update, remove, clear) |
+| `location-flow.ts` | Location setting and address selection |
+| `checkout-flow.ts` | Checkout, UPI selection, and payment confirmation |
 
 ### Shared Types (`src/types.ts`)
 
-All shared interfaces live in `src/types.ts`: `Product`, `Cart`, `CartItem`, `Address`, `OrderSummary`, `BridgeCommand`, `BridgeResponse`, `AppContext`, and others. Import from here rather than defining duplicate types.
+All shared interfaces live in `src/types.ts`: `Product`, `Cart`, `CartItem`, `Address`, `OrderSummary`, `AppContext`, and others. Import from here rather than defining duplicate types.
 
 ### Configuration and Constants (`src/constants.ts`)
 
@@ -206,39 +216,34 @@ async getDeals(limit = 10): Promise<{ products: Product[] }> {
     this.ctx.logger.debug("HTTP deals failed, falling back to Playwright", e);
   }
 
-  // Playwright fallback
-  const result = await this.ctx.browserManager.sendCommand("getDeals", { limit });
-  if (!result.success) {
-    throw new Error(result.error ?? "Failed to get deals");
-  }
-  return result.data as { products: Product[] };
+  // Playwright fallback -- call flow function directly
+  const page = await this.ctx.browserManager.ensurePage();
+  const products = await getDeals(page, limit);
+  return { products };
 }
 ```
 
-Follow the established pattern: attempt HTTP first, fall back to Playwright if needed. Some operations (login, OTP entry, checkout) are Playwright-only because they require full browser interaction.
+Follow the established pattern: attempt HTTP first, fall back to Playwright if needed. The Playwright fallback obtains a page via `browserManager.ensurePage()` and calls a flow function directly. Some operations (login, OTP entry, checkout) are Playwright-only because they require full browser interaction.
 
-### Step 3: Add a bridge command (if browser automation is needed)
+### Step 3: Add a flow function (if browser automation is needed)
 
-If your tool requires Playwright, add a new `case` to the `switch` statement in `scripts/playwright-bridge.ts`:
+If your tool requires Playwright, add a flow function to the appropriate module in `src/playwright/`. If no existing module fits, create a new one.
 
 ```typescript
-case "getDeals": {
-  if (!page) {
-    respond({ id, success: false, error: "Browser not initialized" });
-    break;
-  }
-  try {
-    await page.goto("https://blinkit.com/cn/deals-of-the-day/...");
-    // ... scrape products using page selectors ...
-    respond({ id, success: true, data: { products } });
-  } catch (e: any) {
-    respond({ id, success: false, error: e.message });
-  }
-  break;
+// In src/playwright/search-flow.ts (or a new module)
+import type { Page } from "playwright";
+import type { Product } from "../types.ts";
+
+export async function getDeals(page: Page, limit: number): Promise<Product[]> {
+  await page.goto("https://blinkit.com/cn/deals-of-the-day/...");
+  // ... scrape products using page selectors ...
+  return products.slice(0, limit);
 }
 ```
 
-See [Bridge Command Protocol](#bridge-command-protocol) for the full specification.
+Flow functions are plain async functions. They accept a Playwright `Page` as the first argument, perform browser automation, and return typed results. No IPC protocol, no JSON serialization -- just function calls.
+
+See [Flow Modules](#flow-modules) for conventions.
 
 ### Step 4: Register the tool
 
@@ -261,97 +266,86 @@ The server iterates over `ALL_TOOLS` and registers each one with the MCP SDK. No
 MCP request
   -> tool handler (validates input with Zod, delegates to service)
     -> service method (tries HTTP, falls back to Playwright)
-      -> httpClient.get/post(...)       [direct API call]
-      -> browserManager.sendCommand(...) [JSON IPC to bridge]
-        -> bridge switch/case            [Playwright automation]
+      -> httpClient.get/post(...)              [direct API call]
+      -> browserManager.ensurePage()           [get Playwright page]
+        -> flowFunction(page, ...)             [in-process browser automation]
 ```
 
 ---
 
-## Bridge Command Protocol
+## Flow Modules
 
-The Playwright bridge uses a JSON-over-stdio protocol. The `BrowserManager` writes JSON commands to the bridge's stdin, and reads JSON responses from the bridge's stdout.
+Playwright browser automation is organized into flow modules in `src/playwright/`. Each module groups related automation logic and exports plain async functions.
 
-### Command format
+### Module layout
 
-```typescript
-interface BridgeCommand {
-  id: string;                         // UUID, generated by BrowserManager
-  action: string;                     // The command name (e.g., "search", "addToCart")
-  params: Record<string, unknown>;    // Command-specific parameters
-}
-```
-
-### Response format
-
-```typescript
-interface BridgeResponse {
-  id: string;       // Must match the command's id
-  success: boolean;  // true if the operation succeeded
-  data?: unknown;    // Result payload (on success)
-  error?: string;    // Error message (on failure)
-}
-```
-
-### Message framing
-
-Each message is a single line of JSON terminated by `\n`. The bridge reads lines from stdin and writes lines to stdout. No length prefix or other framing is used.
-
-### Current commands
-
-The bridge handles the following actions:
-
-| Action | Purpose |
+| Module | Responsibility |
 |---|---|
-| `init` | Launch browser, set geolocation, load saved session |
-| `isAlive` | Health check |
-| `isLoggedIn` | Check authentication status |
-| `saveSession` | Persist browser storage state to disk |
-| `login` | Navigate to login, enter phone number |
-| `enterOtp` | Submit OTP code |
-| `search` | Search products by query |
-| `getProductDetails` | Scrape a product's detail page |
-| `browseCategories` | List top-level categories |
-| `browseCategory` | List products in a category |
-| `addToCart` | Add a product to cart |
-| `getCart` | Read current cart contents |
-| `updateCartItem` | Change quantity of a cart item |
-| `removeFromCart` | Remove a product from cart |
-| `clearCart` | Empty the entire cart |
-| `setLocation` | Set delivery location by coordinates |
-| `getAddresses` | List saved delivery addresses |
-| `selectAddress` | Choose a saved address |
-| `checkout` | Initiate checkout process |
-| `getUpiIds` | List saved UPI payment IDs |
-| `selectUpiId` | Choose a UPI ID for payment |
-| `payNow` | Confirm and execute payment |
-| `getOrders` | List order history |
-| `trackOrder` | Get tracking info for an order |
-| `close` | Shut down the browser |
+| `helpers.ts` | Shared Playwright utilities: element waiting, text extraction, debug highlighting |
+| `auth-flow.ts` | Login page navigation, phone number entry, OTP submission |
+| `search-flow.ts` | Product search, product detail scraping, category browsing |
+| `cart-flow.ts` | Adding, updating, removing, and clearing cart items |
+| `location-flow.ts` | Setting delivery location, listing and selecting saved addresses |
+| `checkout-flow.ts` | Checkout initiation, UPI ID retrieval and selection, payment confirmation |
 
-### Adding a new command
+### Writing a flow function
 
-1. Add a new `case` block in the `switch` statement inside the `rl.on("line", ...)` handler in `scripts/playwright-bridge.ts`.
-2. Always call `respond()` with the matching `id` -- both on success and failure. Every command must respond exactly once.
-3. Always guard with `if (!page)` for commands that need a browser page.
-4. Use `log()` (writes to stderr) for debug output. Never use `console.log` -- it would corrupt the JSON protocol on stdout.
+Flow functions follow a consistent pattern:
+
+```typescript
+import type { Page } from "playwright";
+import type { Product } from "../types.ts";
+
+export async function searchProducts(
+  page: Page,
+  query: string,
+  limit: number
+): Promise<Product[]> {
+  await page.goto(`https://blinkit.com/s/?q=${encodeURIComponent(query)}`);
+  // Wait for results, extract data using selectors
+  const products = await page.$$eval(".product-card", (cards) =>
+    cards.map((card) => ({ /* ... */ }))
+  );
+  return products.slice(0, limit);
+}
+```
+
+Key conventions:
+
+1. The first parameter is always a Playwright `Page` instance, obtained by the caller via `browserManager.ensurePage()`.
+2. Return typed results (not raw HTML or unstructured data). Define return types in `src/types.ts`.
+3. Keep functions focused on a single automation task. Compose complex workflows from smaller functions.
+4. Use helpers from `helpers.ts` for common operations (waiting for elements, extracting text, etc.).
+5. Handle Playwright-specific errors (timeouts, missing elements) within the function and throw descriptive errors for the service layer to catch.
+
+### How services call flow functions
+
+Services obtain a Playwright page and pass it to flow functions directly:
+
+```typescript
+// In a service method
+const page = await this.ctx.browserManager.ensurePage();
+const products = await searchProducts(page, query, limit);
+```
+
+There is no IPC, no JSON serialization, and no command protocol. Flow functions are ordinary async function calls within the same Node.js process.
 
 ---
 
 ## Updating Selectors
 
-This is the most common maintenance task. Blinkit frequently updates their website UI, which breaks CSS selectors used in the Playwright bridge.
+This is the most common maintenance task. Blinkit frequently updates their website UI, which breaks CSS selectors used in the Playwright flow modules.
 
 ### Where selectors live
 
-All CSS selectors are currently inline in `scripts/playwright-bridge.ts`, within the individual `case` blocks. There is no centralized selector registry (yet). Search for `page.locator(`, `page.waitForSelector(`, and `querySelector` to find them.
+CSS selectors live in the flow modules under `src/playwright/*.ts`. Each flow module contains the selectors relevant to its domain (e.g., search selectors in `search-flow.ts`, cart selectors in `cart-flow.ts`). Search for `page.locator(`, `page.waitForSelector(`, and `querySelector` to find them.
 
 ### How to identify broken selectors
 
 Symptoms:
 
 - A tool that previously worked starts returning errors or empty results.
-- The bridge logs (stderr) show timeout errors waiting for elements.
+- Server logs (stderr) show Playwright timeout errors waiting for elements.
 
 ### How to find updated selectors
 
@@ -366,7 +360,7 @@ Symptoms:
 - Prefer `data-*` attributes and ARIA roles over class names when available.
 - Use structural selectors (`nth-child`, parent-child relationships) as a last resort.
 - Test with both headless and headed mode. Run the server with `debug: true` in your config to see the browser in action.
-- The bridge has a `debugHighlight()` helper that outlines matched elements in debug mode -- use it during development.
+- The `helpers.ts` module includes a `debugHighlight()` utility that outlines matched elements in debug mode -- use it during development.
 
 ### Testing selector changes
 
@@ -406,15 +400,15 @@ Tools and services interact with external systems (Blinkit's API, a browser). Te
 ```typescript
 import { describe, test, expect, vi } from "vitest";
 
+const mockPage = {
+  goto: vi.fn(() => Promise.resolve()),
+  locator: vi.fn(() => ({ click: vi.fn(), fill: vi.fn(), textContent: vi.fn() })),
+  waitForSelector: vi.fn(() => Promise.resolve()),
+  $$eval: vi.fn(() => Promise.resolve([])),
+};
+
 const mockBrowserManager = {
-  sendCommand: vi.fn(() =>
-    Promise.resolve({
-      id: "test-id",
-      success: true,
-      data: { products: [{ id: "1", name: "Milk", price: 50 }] },
-    })
-  ),
-  ensureReady: vi.fn(() => Promise.resolve()),
+  ensurePage: vi.fn(() => Promise.resolve(mockPage)),
   isRunning: vi.fn(() => true),
 };
 ```
@@ -448,7 +442,7 @@ const mockCtx = {
 } as unknown as AppContext;
 ```
 
-Test the service layer directly. Verify that it calls the HTTP client first, falls back to the browser manager on failure, and returns correctly shaped data.
+Test the service layer directly. Verify that it calls the HTTP client first, falls back to Playwright flow functions on failure, and returns correctly shaped data.
 
 ---
 
@@ -472,7 +466,6 @@ Test the service layer directly. Verify that it calls the HTTP client first, fal
 - Use the `Logger` class from `src/core/logger.ts` for all logging. It writes exclusively to stderr.
 - **NEVER use `console.log`.** It writes to stdout and will break the MCP transport.
 - `console.error` is safe (writes to stderr), but prefer the Logger class for consistent formatting.
-- In the Playwright bridge, use the `log()` helper function (writes to stderr). Never use `console.log` there either -- it would corrupt the bridge's JSON protocol.
 
 ### Imports
 
@@ -509,7 +502,7 @@ Test the service layer directly. Verify that it calls the HTTP client first, fal
 5. Open a pull request against `main`. In the PR description:
 
    - Describe what the change does and why it is needed.
-   - List any new tools, services, or bridge commands added.
+   - List any new tools, services, or flow modules added.
    - Note if selectors were updated and how you verified them.
    - Include test results (paste the output of `pnpm test`).
 
