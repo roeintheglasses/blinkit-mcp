@@ -10,7 +10,7 @@ export class CartService {
   async getCart(): Promise<Cart> {
     const result = await this.ctx.browserManager.sendCommand("getCart", {});
     if (!result.success) {
-      throw new Error(result.error ?? "Failed to get cart");
+      throw new Error(result.error ?? "Failed to retrieve cart contents. Your session may have expired — try checking login status.");
     }
 
     const data = result.data as {
@@ -54,7 +54,7 @@ export class CartService {
     });
 
     if (!result.success) {
-      throw new Error(result.error ?? "Failed to add to cart");
+      throw new Error(result.error ?? `Failed to add product '${productId}' to cart. The product may be out of stock or unavailable at your location.`);
     }
 
     const bridgeData = result.data as { limit_reached?: boolean } | undefined;
@@ -83,7 +83,7 @@ export class CartService {
     });
 
     if (!result.success) {
-      throw new Error(result.error ?? "Failed to update cart item");
+      throw new Error(result.error ?? `Failed to update quantity for product '${productId}'. The item may no longer be in your cart or is out of stock.`);
     }
 
     return this.getCart();
@@ -99,7 +99,7 @@ export class CartService {
     });
 
     if (!result.success) {
-      throw new Error(result.error ?? "Failed to remove from cart");
+      throw new Error(result.error ?? `Failed to remove product '${productId}' from cart. The item may have already been removed.`);
     }
 
     const cart = await this.getCart();
@@ -114,7 +114,7 @@ export class CartService {
     const result = await this.ctx.browserManager.sendCommand("clearCart", {});
 
     if (!result.success) {
-      throw new Error(result.error ?? "Failed to clear cart");
+      throw new Error(result.error ?? "Failed to clear cart. Your session may have expired — try checking login status.");
     }
 
     const data = result.data as { items_removed: number };

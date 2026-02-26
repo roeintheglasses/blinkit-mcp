@@ -100,7 +100,7 @@ export class ProductService {
     // Playwright fallback
     const result = await this.ctx.browserManager.sendCommand("search", { query, limit });
     if (!result.success) {
-      throw new Error(result.error ?? "Search failed");
+      throw new Error(result.error ?? `Product search for '${query}' failed. Try a different search term or check if Blinkit is available at your location.`);
     }
 
     const data = result.data as { products: Product[] };
@@ -148,7 +148,7 @@ export class ProductService {
     // Playwright fallback
     const result = await this.ctx.browserManager.sendCommand("getProductDetails", { productId });
     if (!result.success) {
-      throw new Error(result.error ?? "Failed to get product details");
+      throw new Error(result.error ?? `Could not fetch details for product '${productId}'. The product may be unavailable or the ID may be incorrect.`);
     }
 
     const data = result.data as Record<string, unknown>;
@@ -191,7 +191,7 @@ export class ProductService {
     // Playwright fallback
     const result = await this.ctx.browserManager.sendCommand("browseCategories", {});
     if (!result.success) {
-      throw new Error(result.error ?? "Failed to browse categories");
+      throw new Error(result.error ?? "Failed to load product categories. Blinkit may be temporarily unavailable — try again shortly.");
     }
 
     const data = result.data as { categories: { id: string; name: string; icon_url?: string }[] };
@@ -235,7 +235,7 @@ export class ProductService {
     // Playwright fallback
     const result = await this.ctx.browserManager.sendCommand("browseCategory", { categoryId, limit });
     if (!result.success) {
-      throw new Error(result.error ?? "Failed to browse category");
+      throw new Error(result.error ?? `Failed to load products for category '${categoryId}'. The category may not exist or Blinkit may be temporarily unavailable.`);
     }
 
     const data = result.data as { products: Product[] };

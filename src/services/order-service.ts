@@ -25,7 +25,7 @@ export class OrderService {
     const result = await this.ctx.browserManager.sendCommand("checkout", {});
 
     if (!result.success) {
-      throw new Error(result.error ?? "Checkout failed");
+      throw new Error(result.error ?? "Checkout failed. Make sure your cart is not empty and a delivery address is set.");
     }
 
     const data = result.data as Record<string, unknown>;
@@ -46,7 +46,7 @@ export class OrderService {
     const result = await this.ctx.browserManager.sendCommand("getOrders", { limit });
 
     if (!result.success) {
-      throw new Error(result.error ?? "Failed to get order history");
+      throw new Error(result.error ?? "Failed to retrieve order history. Your session may have expired — try checking login status.");
     }
 
     const data = result.data as { orders: OrderSummary[] };
@@ -59,7 +59,7 @@ export class OrderService {
     });
 
     if (!result.success) {
-      throw new Error(result.error ?? "Failed to track order");
+      throw new Error(result.error ?? `Failed to track order${orderId ? ` '${orderId}'` : ''}. The order ID may be invalid or tracking is not yet available.`);
     }
 
     return result.data as OrderTracking;

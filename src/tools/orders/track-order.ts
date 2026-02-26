@@ -12,7 +12,7 @@ export const trackOrderTool = {
   handler: async (input: { order_id?: string }, ctx: AppContext) => {
     if (!ctx.sessionManager.isAuthenticated()) {
       return {
-        content: [{ type: "text" as const, text: "Not logged in. Use the login tool first." }],
+        content: [{ type: "text" as const, text: "Not logged in. Use the login tool with your phone number, then enter_otp to authenticate." }],
         isError: true,
       };
     }

@@ -45,7 +45,7 @@ export class BrowserManager {
     try {
       const result = await this.sendCommandRaw("isAlive", {}, 5000);
       if (!result.success) {
-        throw new Error("Bridge health check failed");
+        throw new Error("Browser bridge health check failed. The bridge process may be in a bad state.");
       }
     } catch {
       this.logger.warn("Bridge health check failed, restarting...");
@@ -56,14 +56,14 @@ export class BrowserManager {
 
   private sendCommandRaw(action: string, params: Record<string, unknown> = {}, timeout = TIMEOUTS.BRIDGE_COMMAND): Promise<BridgeResponse> {
     if (!this.process || !this.started) {
-      return Promise.reject(new Error("Bridge not running"));
+      return Promise.reject(new Error("Browser bridge is not running. The MCP server may need to be restarted."));
     }
     const id = crypto.randomUUID();
     const command: BridgeCommand = { id, action, params };
     return new Promise<BridgeResponse>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`Bridge command '${action}' timed out after ${timeout}ms`));
+        reject(new Error(`Bridge command '${action}' timed out after ${timeout}ms. The browser may be unresponsive — try restarting the MCP server.`));
       }, timeout);
       this.pending.set(id, { resolve, reject, timer });
       const json = JSON.stringify(command) + "\n";
@@ -154,7 +154,7 @@ export class BrowserManager {
       // Reject all pending
       for (const [id, pending] of this.pending) {
         clearTimeout(pending.timer);
-        pending.reject(new Error(`Bridge process exited (code ${code})`));
+        pending.reject(new Error(`Browser bridge process crashed unexpectedly (exit code ${code}). Try restarting the MCP server.`));
         this.pending.delete(id);
       }
     });
@@ -172,7 +172,7 @@ export class BrowserManager {
       storageStatePath: this.getStorageStatePath(),
     });
     if (!initResult.success) {
-      throw new Error(`Bridge init failed: ${initResult.error}`);
+      throw new Error(`Browser bridge initialization failed: ${initResult.error}. Make sure Playwright browsers are installed (npx playwright install chromium).`);
     }
     this.logger.info("Playwright bridge initialized");
   }
@@ -186,7 +186,7 @@ export class BrowserManager {
     return new Promise<BridgeResponse>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`Bridge command '${action}' timed out after ${TIMEOUTS.BRIDGE_COMMAND}ms`));
+        reject(new Error(`Bridge command '${action}' timed out after ${TIMEOUTS.BRIDGE_COMMAND}ms. The browser may be unresponsive — try restarting the MCP server.`));
       }, TIMEOUTS.BRIDGE_COMMAND);
 
       this.pending.set(id, { resolve, reject, timer });

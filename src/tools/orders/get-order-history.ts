@@ -11,7 +11,7 @@ export const getOrderHistoryTool = {
   handler: async (input: { limit: number }, ctx: AppContext) => {
     if (!ctx.sessionManager.isAuthenticated()) {
       return {
-        content: [{ type: "text" as const, text: "Not logged in. Use the login tool first." }],
+        content: [{ type: "text" as const, text: "Not logged in. Use the login tool with your phone number, then enter_otp to authenticate." }],
         isError: true,
       };
     }

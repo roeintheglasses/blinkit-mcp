@@ -41,7 +41,11 @@ export class BlinkitHttpClient {
       return { ok: response.ok, status: response.status, data };
     } catch (error) {
       this.logger.error(`HTTP request failed: ${url}`, error);
-      throw error;
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new Error(`HTTP ${method} request to ${url} timed out after ${TIMEOUTS.HTTP_REQUEST}ms. Blinkit may be slow or unreachable — check your network connection.`);
+      }
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`HTTP ${method} request to ${url} failed: ${msg}. Check your network connection and that Blinkit is accessible.`);
     } finally {
       clearTimeout(timeout);
     }

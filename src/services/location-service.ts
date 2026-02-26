@@ -21,7 +21,7 @@ export class LocationService {
     });
 
     if (!result.success) {
-      throw new Error(result.error ?? "Failed to set location by address");
+      throw new Error(result.error ?? `Failed to set location to '${address_query}'. The address may not be recognized — try a more specific or different address.`);
     }
 
     return `Location set to: ${address_query}`;
@@ -31,7 +31,7 @@ export class LocationService {
     const result = await this.ctx.browserManager.sendCommand("getAddresses", {});
 
     if (!result.success) {
-      throw new Error(result.error ?? "Failed to get addresses");
+      throw new Error(result.error ?? "Failed to retrieve saved addresses. Your session may have expired — try checking login status.");
     }
 
     const data = result.data as { addresses: Address[]; hint?: string };
@@ -47,7 +47,7 @@ export class LocationService {
     });
 
     if (!result.success) {
-      throw new Error(result.error ?? "Failed to select address");
+      throw new Error(result.error ?? `Failed to select address at index ${index}. Use get_saved_addresses to see valid address indices.`);
     }
 
     const data = result.data as {

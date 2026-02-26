@@ -12,7 +12,7 @@ export const addToCartTool = {
   handler: async (input: { product_id: string; quantity: number }, ctx: AppContext) => {
     if (!ctx.sessionManager.isAuthenticated()) {
       return {
-        content: [{ type: "text" as const, text: "Not logged in. Use the login tool first." }],
+        content: [{ type: "text" as const, text: "Not logged in. Use the login tool with your phone number, then enter_otp to authenticate." }],
         isError: true,
       };
     }

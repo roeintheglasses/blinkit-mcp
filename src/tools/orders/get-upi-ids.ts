@@ -9,7 +9,7 @@ export const getUpiIdsTool = {
   handler: async (_input: {}, ctx: AppContext) => {
     if (!ctx.sessionManager.isAuthenticated()) {
       return {
-        content: [{ type: "text" as const, text: "Not logged in. Use the login tool first." }],
+        content: [{ type: "text" as const, text: "Not logged in. Use the login tool with your phone number, then enter_otp to authenticate." }],
         isError: true,
       };
     }
@@ -19,7 +19,7 @@ export const getUpiIdsTool = {
 
     if (upiIds.length === 0) {
       return {
-        content: [{ type: "text" as const, text: "No UPI IDs found. Make sure you are on the payment page." }],
+        content: [{ type: "text" as const, text: "No UPI IDs found. Make sure you have completed checkout and selected a delivery address to reach the payment page." }],
       };
     }
 

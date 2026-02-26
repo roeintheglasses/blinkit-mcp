@@ -62,7 +62,7 @@ export class AuthService {
     const result = await this.ctx.browserManager.sendCommand("login", { phoneNumber });
 
     if (!result.success) {
-      throw new Error(result.error ?? "Login failed");
+      throw new Error(result.error ?? `Login failed for phone number '${phoneNumber}'. Check that the number is valid and Blinkit is accessible.`);
     }
 
     this.ctx.sessionManager.setLoggedIn(false, phoneNumber);
@@ -75,7 +75,7 @@ export class AuthService {
     const result = await this.ctx.browserManager.sendCommand("enterOtp", { otp });
 
     if (!result.success) {
-      throw new Error(result.error ?? "OTP verification failed");
+      throw new Error(result.error ?? "OTP verification failed. The OTP may have expired or been entered incorrectly — try logging in again to get a new OTP.");
     }
 
     const data = result.data as { logged_in: boolean };
