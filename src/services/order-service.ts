@@ -1,4 +1,10 @@
 import type { AppContext, OrderSummary, OrderTracking } from "../types.ts";
+import { getCart as getCartFlow } from "../playwright/cart-flow.ts";
+import {
+  checkout as checkoutFlow,
+  getOrders as getOrdersFlow,
+  trackOrder as trackOrderFlow,
+} from "../playwright/checkout-flow.ts";
 
 export class OrderService {
   private ctx: AppContext;
@@ -9,10 +15,12 @@ export class OrderService {
 
   async checkout(): Promise<Record<string, unknown>> {
     // Check spending guard first
-    const cartResult = await this.ctx.browserManager.sendCommand("getCart", {});
-    if (cartResult.success) {
-      const cartData = cartResult.data as { total: number };
-      const spendingCheck = this.ctx.spendingGuard.check(cartData.total);
+    const page = await this.ctx.browserManager.ensurePage();
+    let cartTotal = 0;
+    try {
+      const cartData = await getCartFlow(page);
+      cartTotal = cartData.total;
+      const spendingCheck = this.ctx.spendingGuard.check(cartTotal);
       if (spendingCheck.exceeded_hard_limit) {
         return {
           success: false,
@@ -20,20 +28,15 @@ export class OrderService {
           message: spendingCheck.warning,
         };
       }
+    } catch {
+      // Continue with checkout even if cart check fails
     }
 
-    const result = await this.ctx.browserManager.sendCommand("checkout", {});
-
-    if (!result.success) {
-      throw new Error(result.error ?? "Checkout failed. Make sure your cart is not empty and a delivery address is set.");
-    }
-
-    const data = result.data as Record<string, unknown>;
+    const data = await checkoutFlow(page) as Record<string, unknown>;
 
     // Add spending warning if applicable
-    if (cartResult.success) {
-      const cartData = cartResult.data as { total: number };
-      const spendingCheck = this.ctx.spendingGuard.check(cartData.total);
+    if (cartTotal > 0) {
+      const spendingCheck = this.ctx.spendingGuard.check(cartTotal);
       if (spendingCheck.warning) {
         data.spending_warning = spendingCheck.warning;
       }
@@ -43,25 +46,14 @@ export class OrderService {
   }
 
   async getOrderHistory(limit = 5): Promise<OrderSummary[]> {
-    const result = await this.ctx.browserManager.sendCommand("getOrders", { limit });
-
-    if (!result.success) {
-      throw new Error(result.error ?? "Failed to retrieve order history. Your session may have expired — try checking login status.");
-    }
-
-    const data = result.data as { orders: OrderSummary[] };
-    return data.orders;
+    const page = await this.ctx.browserManager.ensurePage();
+    const orders = await getOrdersFlow(page, limit);
+    return orders as unknown as OrderSummary[];
   }
 
   async trackOrder(orderId?: string): Promise<OrderTracking> {
-    const result = await this.ctx.browserManager.sendCommand("trackOrder", {
-      orderId,
-    });
-
-    if (!result.success) {
-      throw new Error(result.error ?? `Failed to track order${orderId ? ` '${orderId}'` : ''}. The order ID may be invalid or tracking is not yet available.`);
-    }
-
-    return result.data as OrderTracking;
+    const page = await this.ctx.browserManager.ensurePage();
+    const data = await trackOrderFlow(page, orderId);
+    return data as unknown as OrderTracking;
   }
 }

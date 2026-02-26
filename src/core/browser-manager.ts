@@ -1,26 +1,19 @@
-import { spawn, type ChildProcess } from "child_process";
+import { firefox, type Browser, type BrowserContext, type Page } from "playwright";
+import { existsSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
-import { existsSync } from "fs";
-import { fileURLToPath } from "url";
 import { homedir } from "os";
-import type { BridgeCommand, BridgeResponse } from "../types.ts";
 import type { Logger } from "./logger.ts";
 import type { BlinkitConfig } from "../config/schema.ts";
 import type { SessionManager } from "./session-manager.ts";
-import { TIMEOUTS, CONFIG_DIR, COOKIES_DIR, STORAGE_STATE_FILE } from "../constants.ts";
+import { CONFIG_DIR, COOKIES_DIR, STORAGE_STATE_FILE } from "../constants.ts";
 
 export class BrowserManager {
-  private process: ChildProcess | null = null;
-  private pending = new Map<string, {
-    resolve: (value: BridgeResponse) => void;
-    reject: (reason: Error) => void;
-    timer: ReturnType<typeof setTimeout>;
-  }>();
+  private browser: Browser | null = null;
+  private context: BrowserContext | null = null;
+  private page: Page | null = null;
   private logger: Logger;
   private config: BlinkitConfig;
   private sessionManager: SessionManager | null = null;
-  private buffer = "";
-  private started = false;
 
   constructor(logger: Logger, config: BlinkitConfig) {
     this.logger = logger;
@@ -35,181 +28,137 @@ export class BrowserManager {
     return join(homedir(), CONFIG_DIR, COOKIES_DIR, STORAGE_STATE_FILE);
   }
 
-  async ensureReady(): Promise<void> {
-    if (!this.started || !this.process) {
-      this.logger.info("Bridge not running, starting...");
-      await this.start();
-      return;
+  /**
+   * Lazily initialize browser, context, and page. Load storage state if exists.
+   * Navigates to blinkit.com and handles initial popups.
+   */
+  async ensurePage(): Promise<Page> {
+    if (this.page && !this.page.isClosed()) return this.page;
+
+    if (!this.browser) {
+      const headless = this.config.debug ? false : this.config.headless;
+      this.browser = await firefox.launch({
+        headless,
+        ...(this.config.slow_mo ? { slowMo: this.config.slow_mo } : {}),
+      });
     }
-    // Health check — send isAlive command with short timeout
-    try {
-      const result = await this.sendCommandRaw("isAlive", {}, 5000);
-      if (!result.success) {
-        throw new Error("Browser bridge health check failed. The bridge process may be in a bad state.");
-      }
-    } catch {
-      this.logger.warn("Bridge health check failed, restarting...");
-      await this.close();
-      await this.start();
-    }
-  }
 
-  private sendCommandRaw(action: string, params: Record<string, unknown> = {}, timeout = TIMEOUTS.BRIDGE_COMMAND): Promise<BridgeResponse> {
-    if (!this.process || !this.started) {
-      return Promise.reject(new Error("Browser bridge is not running. The MCP server may need to be restarted."));
-    }
-    const id = crypto.randomUUID();
-    const command: BridgeCommand = { id, action, params };
-    return new Promise<BridgeResponse>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new Error(`Bridge command '${action}' timed out after ${timeout}ms. The browser may be unresponsive — try restarting the MCP server.`));
-      }, timeout);
-      this.pending.set(id, { resolve, reject, timer });
-      const json = JSON.stringify(command) + "\n";
-      this.process!.stdin!.write(json);
-    });
-  }
-
-  private getProjectRoot(): string {
-    const thisDir = dirname(fileURLToPath(import.meta.url));
-    // From src/core/ -> project root is ../../
-    // From dist/ -> project root is ../
-    const srcRoot = join(thisDir, "..", "..");
-    if (existsSync(join(srcRoot, "package.json"))) return srcRoot;
-    const distRoot = join(thisDir, "..");
-    if (existsSync(join(distRoot, "package.json"))) return distRoot;
-    return srcRoot;
-  }
-
-  private getBridgePath(): string {
-    const root = this.getProjectRoot();
-    // Check scripts/ first (dev mode), then dist/ (built mode)
-    const devPath = join(root, "scripts", "playwright-bridge.ts");
-    if (existsSync(devPath)) return devPath;
-    const distPath = join(root, "dist", "playwright-bridge.ts");
-    if (existsSync(distPath)) return distPath;
-    return devPath; // fallback
-  }
-
-  private getTsxPath(): string {
-    const root = this.getProjectRoot();
-    // Use local tsx binary from node_modules
-    const localTsx = join(root, "node_modules", ".bin", "tsx");
-    if (existsSync(localTsx)) return localTsx;
-    // Fallback to npx
-    return "npx";
-  }
-
-  async start(): Promise<void> {
-    if (this.started && this.process) return;
-
-    const bridgePath = this.getBridgePath();
-    const tsxPath = this.getTsxPath();
-    const projectRoot = this.getProjectRoot();
-    this.logger.info(`Starting Playwright bridge: ${tsxPath} ${bridgePath}`);
-
-    const args = tsxPath.endsWith("npx") ? ["tsx", bridgePath] : [bridgePath];
-
-    // debug mode implies headed (headless=false)
-    const headless = this.config.debug ? false : this.config.headless;
-
-    this.process = spawn(tsxPath, args, {
-      stdio: ["pipe", "pipe", "pipe"],
-      cwd: projectRoot,
-      env: {
-        ...process.env,
-        BLINKIT_HEADLESS: String(headless),
-      },
-    });
-
-    this.process.stdout?.on("data", (chunk: Buffer) => {
-      this.buffer += chunk.toString();
-      const lines = this.buffer.split("\n");
-      this.buffer = lines.pop() ?? "";
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const response = JSON.parse(line) as BridgeResponse;
-          const pending = this.pending.get(response.id);
-          if (pending) {
-            clearTimeout(pending.timer);
-            this.pending.delete(response.id);
-            pending.resolve(response);
-          }
-        } catch {
-          this.logger.debug(`Bridge stdout (non-JSON): ${line}`);
-        }
-      }
-    });
-
-    this.process.stderr?.on("data", (chunk: Buffer) => {
-      this.logger.debug(`Bridge stderr: ${chunk.toString().trim()}`);
-    });
-
-    this.process.on("exit", (code) => {
-      this.logger.warn(`Playwright bridge exited with code ${code}`);
-      this.started = false;
-      this.process = null;
-      // Reject all pending
-      for (const [id, pending] of this.pending) {
-        clearTimeout(pending.timer);
-        pending.reject(new Error(`Browser bridge process crashed unexpectedly (exit code ${code}). Try restarting the MCP server.`));
-        this.pending.delete(id);
-      }
-    });
-
-    this.started = true;
-
-    // Wait for bridge to be ready by sending init command with session data
+    // Create context with storage state if available
+    const storagePath = this.getStorageStatePath();
     const session = this.sessionManager?.getSession();
-    const initResult = await this.sendCommand("init", {
-      headless,
-      debug: this.config.debug,
-      slowMo: this.config.debug ? (this.config.slow_mo || 500) : this.config.slow_mo,
-      lat: session?.lat ?? this.config.default_lat ?? 28.6139,
-      lon: session?.lon ?? this.config.default_lon ?? 77.209,
-      storageStatePath: this.getStorageStatePath(),
-    });
-    if (!initResult.success) {
-      throw new Error(`Browser bridge initialization failed: ${initResult.error}. Make sure Playwright browsers are installed (npx playwright install chromium).`);
+    const lat = session?.lat ?? this.config.default_lat ?? 28.6139;
+    const lon = session?.lon ?? this.config.default_lon ?? 77.209;
+
+    const contextOptions: any = {
+      userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0",
+      viewport: { width: 1280, height: 800 },
+      permissions: ["geolocation"],
+      geolocation: { latitude: lat, longitude: lon },
+    };
+
+    if (existsSync(storagePath)) {
+      this.logger.info(`Loading session from ${storagePath}`);
+      contextOptions.storageState = storagePath;
     }
-    this.logger.info("Playwright bridge initialized");
+
+    try {
+      this.context = await this.browser.newContext(contextOptions);
+    } catch (e) {
+      this.logger.warn(`Failed to create context with storage state: ${e}, trying without`);
+      delete contextOptions.storageState;
+      this.context = await this.browser.newContext(contextOptions);
+    }
+
+    // Monitor payment-related network responses
+    this.context.on("response", async (response) => {
+      try {
+        const url = response.url();
+        if (url.includes("zpaykit") || url.includes("payment")) {
+          if (response.status() >= 400) {
+            this.logger.debug(`Payment API Error ${response.status()} at ${url}`);
+          }
+          const contentType = response.headers()["content-type"] || "";
+          if (contentType.includes("application/json")) {
+            try {
+              const data = await response.json();
+              if (data && (data.status === "failed" || data.error)) {
+                this.logger.debug(`Payment API Failure: ${JSON.stringify(data)}`);
+              }
+            } catch {
+              // ignore parse errors
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
+    });
+
+    this.page = await this.context.newPage();
+
+    // Navigate to blinkit.com
+    try {
+      await this.page.goto(`https://blinkit.com`, {
+        waitUntil: "domcontentloaded",
+        timeout: 60000,
+      });
+      this.logger.info("Opened blinkit.com");
+    } catch (e) {
+      this.logger.warn(`Warning: Navigation to Blinkit took too long or failed: ${e}. Proceeding.`);
+    }
+
+    // Handle "Detect my location" popup
+    try {
+      const locationBtn = this.page.locator("button").filter({ hasText: "Detect my location" });
+      try {
+        await locationBtn.waitFor({ state: "visible", timeout: 3000 });
+        this.logger.info("Location popup detected. Clicking 'Detect my location'...");
+        await locationBtn.click();
+        await locationBtn.waitFor({ state: "hidden", timeout: 5000 });
+        this.logger.info("Location popup dismissed.");
+      } catch {
+        // Timed out -- popup didn't appear or already handled
+      }
+    } catch (e) {
+      this.logger.debug(`Note: Error checking location popup: ${e}`);
+    }
+
+    this.logger.info("Browser initialized and ready");
+    return this.page;
   }
 
-  async sendCommand(action: string, params: Record<string, unknown> = {}): Promise<BridgeResponse> {
-    await this.ensureReady();
+  async getContext(): Promise<BrowserContext> {
+    await this.ensurePage(); // ensures context is created
+    return this.context!;
+  }
 
-    const id = crypto.randomUUID();
-    const command: BridgeCommand = { id, action, params };
-
-    return new Promise<BridgeResponse>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new Error(`Bridge command '${action}' timed out after ${TIMEOUTS.BRIDGE_COMMAND}ms. The browser may be unresponsive — try restarting the MCP server.`));
-      }, TIMEOUTS.BRIDGE_COMMAND);
-
-      this.pending.set(id, { resolve, reject, timer });
-
-      const json = JSON.stringify(command) + "\n";
-      this.process!.stdin!.write(json);
-    });
+  async saveStorageState(): Promise<void> {
+    if (!this.context) return;
+    const path = this.getStorageStatePath();
+    const dir = dirname(path);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true, mode: 0o700 });
+    }
+    try {
+      await this.context.storageState({ path });
+      this.logger.info(`Storage state saved to ${path}`);
+    } catch (e) {
+      this.logger.warn(`Failed to save storage state: ${e}`);
+    }
   }
 
   async close(): Promise<void> {
-    if (this.process) {
-      try {
-        await this.sendCommand("close", {});
-      } catch {
-        // Ignore errors during close
-      }
-      this.process.kill();
-      this.process = null;
-      this.started = false;
+    // Save session before closing
+    await this.saveStorageState();
+    if (this.browser) {
+      await this.browser.close();
+      this.browser = null;
+      this.context = null;
+      this.page = null;
     }
   }
 
   isRunning(): boolean {
-    return this.started && this.process !== null;
+    return this.browser !== null && this.page !== null && !this.page.isClosed();
   }
 }

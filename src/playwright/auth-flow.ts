@@ -1,57 +1,147 @@
-import type { Page } from "playwright";
-import { SELECTORS } from "./selectors.ts";
-import { waitAndClick, waitAndFill } from "./helpers.ts";
-import { BLINKIT_BASE_URL } from "../constants.ts";
+import type { Page, BrowserContext } from "playwright";
+import { debugStep, checkLoggedIn } from "./helpers.ts";
 
-export async function loginFlow(page: Page, phoneNumber: string): Promise<void> {
-  await page.goto(BLINKIT_BASE_URL, { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(2000);
-
-  // Click the Login button
-  await waitAndClick(page, SELECTORS.LOGIN_BUTTON, 15000);
-  await page.waitForTimeout(1000);
-
-  // Fill phone number
-  const phoneInput = page.locator(SELECTORS.PHONE_INPUT).first();
-  await phoneInput.waitFor({ timeout: 10000 });
-  await phoneInput.fill(phoneNumber);
-  await page.waitForTimeout(500);
-
-  // Click Continue to send OTP
-  await waitAndClick(page, SELECTORS.CONTINUE_BUTTON, 5000);
-  await page.waitForTimeout(2000);
+function log(msg: string): void {
+  process.stderr.write(`[playwright] ${msg}\n`);
 }
 
-export async function enterOtpFlow(page: Page, otp: string): Promise<{
-  logged_in: boolean;
-}> {
-  // Fill OTP digits into the inputs
-  const otpInputs = page.locator(SELECTORS.OTP_FIRST_INPUT);
-  const count = await otpInputs.count();
+/**
+ * Login flow: navigates to blinkit, clicks Login, fills phone number, clicks Continue.
+ * After this returns, an OTP should be sent to the phone.
+ * Throws on failure.
+ */
+export async function loginFlow(page: Page, phoneNumber: string): Promise<void> {
+  await debugStep(page, "Navigating to blinkit.com");
 
-  if (count >= 4) {
-    // Individual digit inputs
-    for (let i = 0; i < 4; i++) {
-      await otpInputs.nth(i).fill(otp[i]);
-      await page.waitForTimeout(200);
-    }
-  } else {
-    // Single OTP input
-    const singleInput = page.locator(SELECTORS.OTP_INPUTS).first();
-    await singleInput.fill(otp);
+  // Check if already on blinkit
+  if (!page.url().includes("blinkit.com")) {
+    await page.goto("https://blinkit.com", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForTimeout(2000);
   }
 
-  // Wait for login to complete (page navigation or session established)
-  await page.waitForTimeout(5000);
+  // Click Login button -- try multiple strategies
+  await debugStep(page, "Looking for Login button");
+  if (await page.isVisible("text='Login'")) {
+    await debugStep(page, "Clicking Login text button");
+    await page.click("text='Login'");
+  } else if (await page.isVisible("div[class*='ProfileButton__Container']")) {
+    await debugStep(page, "Clicking ProfileButton container");
+    await page.locator("div[class*='ProfileButton__Container']").click();
+  } else {
+    log("Login button not found, checking if already on login screen");
+  }
+  await page.waitForTimeout(1000);
+
+  // Wait for phone input
+  await debugStep(page, "Waiting for phone number input");
+  const phoneInput = await page.waitForSelector(
+    "input[type='tel'], input[name='mobile'], input[type='text']",
+    { state: "visible", timeout: 30000 }
+  );
+  if (phoneInput) {
+    await debugStep(page, `Filling phone number: ${phoneNumber}`);
+    await phoneInput.click();
+    await phoneInput.fill(phoneNumber);
+    await page.waitForTimeout(500);
+
+    // Submit
+    await debugStep(page, "Submitting phone number");
+    if (await page.isVisible("text='Next'")) {
+      await page.click("text='Next'");
+    } else if (await page.isVisible("text='Continue'")) {
+      await page.click("text='Continue'");
+    } else {
+      await page.keyboard.press("Enter");
+    }
+    await page.waitForTimeout(2000);
+  }
+}
+
+/**
+ * Enter OTP flow: fills OTP, verifies login with retry loop + cookie fallback,
+ * saves storage state. Returns whether login was detected.
+ */
+export async function enterOtpFlow(
+  page: Page,
+  context: BrowserContext,
+  otp: string,
+  storageStatePath: string
+): Promise<{ logged_in: boolean }> {
+  await debugStep(page, "Waiting for OTP input fields");
+  await page.waitForSelector("input", { timeout: 30000 });
+  const inputs = page.locator("input");
+  const count = await inputs.count();
+
+  if (count >= 4) {
+    await debugStep(page, "Filling 4-digit OTP inputs");
+    const otpInputs = page.locator("input[inputmode='numeric']");
+    const otpCount = await otpInputs.count();
+    if (otpCount >= 4) {
+      for (let i = 0; i < 4; i++) {
+        await otpInputs.nth(i).fill(otp[i]);
+        await page.waitForTimeout(100);
+      }
+    } else {
+      for (let i = 0; i < Math.min(4, count); i++) {
+        await inputs.nth(i).fill(otp[i]);
+        await page.waitForTimeout(100);
+      }
+    }
+  } else {
+    await debugStep(page, "Filling single OTP input");
+    const otpInput = page.locator("input[data-test-id='otp-input'], input[name*='otp'], input[id*='otp']").first();
+    if (await otpInput.isVisible().catch(() => false)) {
+      await otpInput.fill(otp);
+    } else {
+      await page.fill("input", otp);
+    }
+  }
+
+  await debugStep(page, "Submitting OTP");
+  await page.keyboard.press("Enter");
+
+  // Wait for page to react to OTP submission
   await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
 
-  // Check if login succeeded by looking for logged-in indicators
-  const allCookies = await page.context().cookies();
-  const hasCookies = allCookies.length > 0;
-  const hasAccessToken = allCookies.some(c => c.name === "access_token") ||
-    await page.evaluate(() => !!localStorage.getItem("access_token")).catch(() => false);
+  // Retry checkLoggedIn with delays -- the page may be in transition
+  // (success animation, location popup, redirect) right after OTP
+  let loggedIn = false;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    loggedIn = await checkLoggedIn(page);
+    if (loggedIn) break;
+    log(`Login check attempt ${attempt + 1}/5: not detected yet, waiting...`);
+    await page.waitForTimeout(2000);
+  }
 
-  const logged_in = hasCookies && hasAccessToken;
+  // Fallback: check if auth cookies exist even if UI indicators aren't visible
+  // (e.g., location popup or overlay is blocking "My Account")
+  if (!loggedIn) {
+    const cookies = await context.cookies("https://blinkit.com");
+    const hasAuthCookie = cookies.some(
+      (c) => c.name === "auth_key" || c.name === "access_token" || c.name === "_session_token"
+    );
+    if (hasAuthCookie) {
+      log("UI check failed but auth cookies found -- treating as logged in");
+      loggedIn = true;
+    }
+  }
 
-  return { logged_in };
+  log(`OTP verification: loggedIn=${loggedIn}`);
+
+  // Always save storage state after OTP -- even if we can't confirm login,
+  // the cookies may still be valid
+  try {
+    const { existsSync, mkdirSync } = await import("fs");
+    const { dirname } = await import("path");
+    const dir = dirname(storageStatePath);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true, mode: 0o700 });
+    }
+    await context.storageState({ path: storageStatePath });
+    log(`Session saved to ${storageStatePath}`);
+  } catch (e) {
+    log(`Failed to save storage state: ${e}`);
+  }
+
+  return { logged_in: loggedIn };
 }

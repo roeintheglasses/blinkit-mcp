@@ -1,5 +1,167 @@
 import type { Page } from "playwright";
 
+/** Module-level debug mode flag — set this to enable debug helpers */
+export let debugMode = false;
+
+export function setDebugMode(enabled: boolean): void {
+  debugMode = enabled;
+}
+
+function log(msg: string): void {
+  process.stderr.write(`[playwright] ${msg}\n`);
+}
+
+// ─── Debug helpers ───────────────────────────────────────────────────────────
+
+/** Highlight an element with a colored border in debug mode */
+export async function debugHighlight(page: Page, selector: string, color = "red"): Promise<void> {
+  if (!debugMode) return;
+  try {
+    await page.evaluate(
+      ({ sel, col }: { sel: string; col: string }) => {
+        const el = (globalThis as any).document.querySelector(sel);
+        if (el) el.style.outline = `3px solid ${col}`;
+      },
+      { sel: selector, col: color }
+    );
+  } catch {
+    // ignore
+  }
+}
+
+/** Log + pause briefly in debug mode so you can see what's happening */
+export async function debugStep(page: Page, label: string): Promise<void> {
+  if (!debugMode) return;
+  log(`[DEBUG] ${label}`);
+  await page.waitForTimeout(800);
+}
+
+// ─── Shared page helpers ─────────────────────────────────────────────────────
+
+/** Check if user is logged in by looking at UI state */
+export async function checkLoggedIn(page: Page): Promise<boolean> {
+  try {
+    // Positive indicators -- these confirm the user IS logged in
+    if (await page.isVisible("text='My Account'").catch(() => false)) return true;
+    if (await page.isVisible(".user-profile").catch(() => false)) return true;
+    if (await page.locator("div[class*='ProfileButton'], div[class*='AccountButton'], div[class*='UserProfile']")
+      .first().isVisible({ timeout: 1000 }).catch(() => false)) return true;
+
+    // Negative indicator -- if Login button IS visible, user is definitely NOT logged in
+    const loginVisible = await page.isVisible("text='Login'").catch(() => false);
+    if (loginVisible) return false;
+
+    // If neither positive nor negative indicators found (e.g., overlay blocking, page loading),
+    // default to not logged in to avoid false positives
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/** Check if store is closed or unavailable */
+export async function isStoreClosed(page: Page): Promise<string | false> {
+  try {
+    if (await page.isVisible("text='Store is closed'").catch(() => false)) {
+      return "Store is closed.";
+    }
+    if (await page.isVisible("text=\"Sorry, can't take your order\"").catch(() => false)) {
+      return "Sorry, can't take your order. Store is unavailable.";
+    }
+    if (await page.isVisible("text='Currently unavailable'").catch(() => false)) {
+      return "Store is currently unavailable at this location.";
+    }
+    if (await page.isVisible("text='High Demand'").catch(() => false)) {
+      return "Store is experiencing high demand. Please try again later.";
+    }
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
+/** Navigate through intermediate checkout screens (tip, proceed to pay, etc.) until payment widget appears */
+export async function navigateToPaymentWidget(page: Page, timeoutMs = 20000): Promise<{
+  reached: boolean;
+  skippedSteps: string[];
+}> {
+  const skippedSteps: string[] = [];
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    // Check if payment widget is already present
+    if (await page.locator("#payment_widget").count() > 0) {
+      return { reached: true, skippedSteps };
+    }
+
+    // Check for delivery tip screen
+    const tipSection = page.locator("text=/[Dd]elivery [Tt]ip/, text=/[Aa]dd [Tt]ip/, text=/[Tt]ip your delivery/");
+    if (await tipSection.count() > 0) {
+      log("Detected delivery tip screen. Looking for skip/proceed option...");
+      // Try "No tip" or "Skip" first
+      const noTip = page.locator("text=/[Nn]o [Tt]ip/, text=/[Ss]kip/");
+      if (await noTip.count() > 0) {
+        await noTip.first().click();
+        skippedSteps.push("delivery_tip_skipped");
+        await page.waitForTimeout(1000);
+        continue;
+      }
+      // Fallback: look for Proceed/Continue button
+      const proceedBtn = page.locator("button, div").filter({ hasText: /Proceed|Continue|Next/ }).last();
+      if (await proceedBtn.isVisible().catch(() => false)) {
+        await proceedBtn.click();
+        skippedSteps.push("delivery_tip_proceeded");
+        await page.waitForTimeout(1000);
+        continue;
+      }
+    }
+
+    // Check for "Proceed to Pay" / "Proceed to Payment" button
+    const proceedToPay = page.locator(
+      "button:has-text('Proceed to Pay'), div:has-text('Proceed to Pay'), " +
+      "button:has-text('Proceed to Payment'), button:has-text('Continue to Payment')"
+    );
+    if (await proceedToPay.count() > 0 && await proceedToPay.last().isVisible().catch(() => false)) {
+      await proceedToPay.last().click();
+      skippedSteps.push("proceed_to_pay_clicked");
+      log("Clicked 'Proceed to Pay'");
+      await page.waitForTimeout(2000);
+      continue;
+    }
+
+    // Check for generic "Proceed" or "Continue" button (fallback)
+    const genericProceed = page.locator("button, div").filter({ hasText: /^Proceed$|^Continue$|^Next$/ }).last();
+    if (await genericProceed.isVisible().catch(() => false)) {
+      await genericProceed.click();
+      skippedSteps.push("generic_proceed_clicked");
+      log("Clicked generic Proceed/Continue button");
+      await page.waitForTimeout(1500);
+      continue;
+    }
+
+    // Check for dismissible overlays/modals
+    const closeBtn = page.locator("button[aria-label='close'], button[aria-label='Close'], div[class*='close']");
+    if (await closeBtn.count() > 0 && await closeBtn.first().isVisible().catch(() => false)) {
+      await closeBtn.first().click();
+      skippedSteps.push("modal_dismissed");
+      await page.waitForTimeout(500);
+      continue;
+    }
+
+    await page.waitForTimeout(500);
+  }
+
+  return { reached: false, skippedSteps };
+}
+
+/** Extract numeric price from a text string like "₹199" or "199.50" */
+export function extractPrice(text: string | null): number {
+  if (!text) return 0;
+  return parseFloat(text.replace(/[^0-9.]/g, "")) || 0;
+}
+
+// ─── Generic utility helpers (preserved from original) ───────────────────────
+
 export async function waitAndClick(page: Page, selector: string, timeout = 10000): Promise<void> {
   await page.waitForSelector(selector, { timeout });
   await page.click(selector);

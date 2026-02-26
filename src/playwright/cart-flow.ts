@@ -1,164 +1,293 @@
 import type { Page } from "playwright";
-import { SELECTORS } from "./selectors.ts";
-import { waitAndClick, extractNumber } from "./helpers.ts";
-import { BLINKIT_BASE_URL } from "../constants.ts";
-import type { CartItem } from "../types.ts";
+import { isStoreClosed, extractPrice } from "./helpers.ts";
+import { getKnownProducts, reSearchProduct } from "./search-flow.ts";
 
-export async function getCart(page: Page): Promise<{
-  items: CartItem[];
-  subtotal: number;
-  delivery_fee: number;
-  total: number;
-}> {
-  await page.goto(`${BLINKIT_BASE_URL}/checkout/cart`, {
-    waitUntil: "domcontentloaded",
-  });
-  await page.waitForTimeout(3000);
+function log(msg: string): void {
+  process.stderr.write(`[playwright] ${msg}\n`);
+}
 
-  // Check if cart is empty
-  const emptyIndicator = await page.locator(SELECTORS.CART_EMPTY).count();
-  if (emptyIndicator > 0) {
-    return { items: [], subtotal: 0, delivery_fee: 0, total: 0 };
+/**
+ * Add a product to cart by its product ID on the current page.
+ * Uses known products map for cross-search recovery if product is not visible.
+ */
+export async function addToCart(
+  page: Page,
+  productId: string,
+  quantity: number
+): Promise<{ success: boolean; cart_total: number; item_name: string; quantity_added: number }> {
+  // Check store availability first
+  const storeStatus = await isStoreClosed(page);
+  if (storeStatus) {
+    throw new Error(`CRITICAL: ${storeStatus}`);
   }
 
-  const items: CartItem[] = [];
-  const cartItems = page.locator(SELECTORS.CART_ITEM);
-  const count = await cartItems.count();
+  // Target the specific product card by its ID attribute
+  let card = page.locator(`div[id='${productId}']`);
 
-  for (let i = 0; i < count; i++) {
-    try {
-      const item = cartItems.nth(i);
-      const name = await item.locator(SELECTORS.CART_ITEM_NAME).textContent().catch(() => null);
-      const priceText = await item.locator(SELECTORS.CART_ITEM_PRICE).textContent().catch(() => null);
-      const qtyText = await item.locator(SELECTORS.CART_ITEM_QTY).textContent().catch(() => null);
+  if (await card.count() === 0) {
+    log(`Product ${productId} not found on current page.`);
 
-      const price = extractNumber(priceText);
-      const quantity = parseInt(qtyText ?? "1", 10) || 1;
+    // Check known products for recovery via re-search
+    const knownProducts = getKnownProducts();
+    const known = knownProducts.get(productId);
+    if (known?.sourceQuery) {
+      log(`Product found in history. Re-searching for '${known.sourceQuery}'...`);
+      await reSearchProduct(page, known.sourceQuery);
 
-      items.push({
-        product_id: `cart-item-${i}`,
-        name: name?.trim() ?? "Unknown",
-        quantity,
-        unit_price: price,
-        total_price: price * quantity,
-        unit: "",
-      });
-    } catch {
-      // Skip
+      // Re-locate the card after search
+      card = page.locator(`div[id='${productId}']`);
+      if (await card.count() === 0) {
+        log(`CRITICAL: Product ${productId} still not found after re-search.`);
+        throw new Error(`Product ${productId} not found after re-search`);
+      }
+    } else {
+      log("Product ID unknown and not on current page.");
+      throw new Error(`Product ${productId} not found on page and not in search history`);
     }
   }
 
-  const totalText = await page.locator(SELECTORS.CART_TOTAL).last().textContent().catch(() => null);
-  const total = extractNumber(totalText);
+  // Find the ADD button inside the card
+  const addBtn = card.locator("div").filter({ hasText: "ADD" }).last();
+  let itemsToAdd = quantity;
+  let actualAdded = 0;
+
+  // If ADD button is visible, click it once to start
+  if (await addBtn.isVisible().catch(() => false)) {
+    await addBtn.click();
+    log(`Clicked ADD for product ${productId} (1/${quantity}).`);
+    itemsToAdd--;
+    actualAdded++;
+    await page.waitForTimeout(500);
+  }
+
+  // Use increment button for remaining quantity
+  if (itemsToAdd > 0) {
+    await page.waitForTimeout(1000);
+
+    // Find the + button
+    const plusBtn = card.locator(".icon-plus").first();
+    let plusClickable;
+    if (await plusBtn.count() > 0) {
+      plusClickable = plusBtn.locator("..");
+    } else {
+      plusClickable = card.locator("text='+'").first();
+    }
+
+    if (await plusClickable.isVisible().catch(() => false)) {
+      for (let i = 0; i < itemsToAdd; i++) {
+        await plusClickable.click();
+        actualAdded++;
+        log(`Incrementing quantity for ${productId} (${actualAdded}/${quantity}).`);
+
+        // Check for quantity limit
+        try {
+          const limitMsg = page.getByText("Sorry, you can't add more of this item");
+          if (await limitMsg.isVisible({ timeout: 1000 }).catch(() => false)) {
+            log(`Quantity limit reached for ${productId}.`);
+            return {
+              success: true,
+              cart_total: 0,
+              item_name: productId,
+              quantity_added: actualAdded,
+            };
+          }
+        } catch {
+          // No limit message, continue
+        }
+
+        await page.waitForTimeout(500);
+      }
+    } else {
+      log(`Could not find '+' button for remaining quantity of ${productId}.`);
+    }
+  }
+
+  await page.waitForTimeout(1000);
+
+  // Check for store unavailable modal after adding
+  if (await page.isVisible("text=\"Sorry, can't take your order\"").catch(() => false)) {
+    throw new Error("WARNING: Store is unavailable (modal detected after add).");
+  }
 
   return {
-    items,
-    subtotal: total,
-    delivery_fee: 0,
-    total,
+    success: true,
+    cart_total: 0,
+    item_name: productId,
+    quantity_added: actualAdded > 0 ? actualAdded : quantity,
   };
 }
 
-export async function addToCart(page: Page, productId: string, quantity: number): Promise<boolean> {
-  // Navigate to product page and click ADD
-  await page.goto(`${BLINKIT_BASE_URL}/prn/product/prid/${productId}`, {
-    waitUntil: "domcontentloaded",
-  });
-  await page.waitForTimeout(2000);
-
-  try {
-    await waitAndClick(page, SELECTORS.PRODUCT_ADD_BTN, 5000);
-    await page.waitForTimeout(1000);
-
-    // Click plus button for additional quantity
-    for (let i = 1; i < quantity; i++) {
-      await waitAndClick(page, SELECTORS.CART_PLUS, 3000);
-      await page.waitForTimeout(500);
-    }
-
-    return true;
-  } catch {
-    return false;
+/**
+ * Get cart contents by opening the cart drawer.
+ */
+export async function getCart(page: Page): Promise<{
+  items: any[];
+  subtotal: number;
+  total: number;
+  delivery_fee: number;
+  item_count: number;
+  raw_cart_text?: string;
+  warning?: string;
+}> {
+  // Click the cart button to open the cart drawer
+  const cartBtn = page.locator("div[class*='CartButton__Button'], div[class*='CartButton__Container']");
+  if (await cartBtn.count() > 0) {
+    await cartBtn.first().click();
+    await page.waitForTimeout(2000);
+  } else {
+    return { items: [], subtotal: 0, delivery_fee: 0, total: 0, item_count: 0, warning: "Cart button not found." };
   }
+
+  // 1. Critical availability check
+  const storeStatus = await isStoreClosed(page);
+  if (storeStatus) {
+    return { items: [], subtotal: 0, delivery_fee: 0, total: 0, item_count: 0, warning: `CRITICAL: ${storeStatus}` };
+  }
+
+  // 2. Check for cart activity indicators
+  const isCartActive =
+    await page.isVisible("text=/Bill details/i").catch(() => false) ||
+    await page.isVisible("button:has-text('Proceed')").catch(() => false) ||
+    await page.isVisible("text='ordering for'").catch(() => false);
+
+  // Scrape cart content from the drawer
+  const drawer = page.locator(
+    "div[class*='CartDrawer'], div[class*='CartSidebar'], div.cart-modal-rn, div[class*='CartWrapper__CartContainer']"
+  ).first();
+
+  let cartText = "";
+  if (await drawer.count() > 0) {
+    cartText = await drawer.innerText().catch(() => "");
+    if (cartText.includes("Currently unavailable") || cartText.includes("can't take your order")) {
+      return { items: [], subtotal: 0, delivery_fee: 0, total: 0, item_count: 0, warning: "CRITICAL: Store is unavailable (detected in cart)." };
+    }
+  }
+
+  if (!isCartActive && !cartText.includes("\u20B9")) {
+    return { items: [], subtotal: 0, delivery_fee: 0, total: 0, item_count: 0, warning: "Cart seems empty or store is unavailable." };
+  }
+
+  // Parse total from cart text
+  let total = 0;
+  const totalMatch = cartText.match(/(?:Grand Total|Total|To Pay)[^\d\u20B9]*[\u20B9]?\s*([\d,.]+)/i);
+  if (totalMatch) {
+    total = extractPrice(totalMatch[1]);
+  }
+
+  return {
+    items: [],
+    subtotal: total,
+    delivery_fee: 0,
+    total,
+    item_count: 0,
+    raw_cart_text: cartText,
+  };
 }
 
-export async function updateCartItem(page: Page, productId: string, quantity: number): Promise<boolean> {
-  await page.goto(`${BLINKIT_BASE_URL}/checkout/cart`, {
-    waitUntil: "domcontentloaded",
-  });
-  await page.waitForTimeout(2000);
+/**
+ * Update a cart item's quantity on the current page.
+ */
+export async function updateCartItem(
+  page: Page,
+  productId: string,
+  quantity: number
+): Promise<{ success: boolean; new_quantity: number }> {
+  const card = page.locator(`div[id='${productId}']`);
 
-  // If quantity is 0, remove
+  if (await card.count() === 0) {
+    throw new Error(`Product ${productId} not found on page`);
+  }
+
   if (quantity === 0) {
-    return removeFromCart(page, productId);
-  }
-
-  // Find the item and adjust quantity using +/- buttons
-  // This is a simplified approach — in practice we'd match by product name/id
-  try {
-    const items = page.locator(SELECTORS.CART_ITEM);
-    const count = await items.count();
-
-    for (let i = 0; i < count; i++) {
-      const item = items.nth(i);
-      const qtyText = await item.locator(SELECTORS.CART_ITEM_QTY).textContent().catch(() => "1");
-      const currentQty = parseInt(qtyText ?? "1", 10) || 1;
-
-      if (quantity > currentQty) {
-        for (let j = 0; j < quantity - currentQty; j++) {
-          await item.locator(SELECTORS.CART_PLUS).click();
-          await page.waitForTimeout(500);
-        }
-      } else if (quantity < currentQty) {
-        for (let j = 0; j < currentQty - quantity; j++) {
-          await item.locator(SELECTORS.CART_MINUS).click();
-          await page.waitForTimeout(500);
-        }
+    // Remove: click minus until ADD reappears
+    while (true) {
+      const minusBtn = card.locator(".icon-minus").first();
+      if (await minusBtn.count() === 0) break;
+      await minusBtn.locator("..").click();
+      await page.waitForTimeout(500);
+      if (await card.locator("div").filter({ hasText: "ADD" }).last().isVisible().catch(() => false)) {
+        break;
       }
-      return true;
     }
-    return false;
-  } catch {
-    return false;
+    return { success: true, new_quantity: 0 };
+  }
+
+  return { success: true, new_quantity: quantity };
+}
+
+/**
+ * Remove items from cart by decrementing quantity.
+ * Uses known products for re-search recovery if not on page.
+ */
+export async function removeFromCart(
+  page: Page,
+  productId: string,
+  quantity: number
+): Promise<{ success: boolean }> {
+  let card = page.locator(`div[id='${productId}']`);
+
+  if (await card.count() === 0) {
+    // Attempt recovery via known products re-search
+    const knownProducts = getKnownProducts();
+    const known = knownProducts.get(productId);
+    if (known?.sourceQuery) {
+      await reSearchProduct(page, known.sourceQuery);
+      card = page.locator(`div[id='${productId}']`);
+      if (await card.count() === 0) {
+        throw new Error(`Product ${productId} not found after recovery search.`);
+      }
+    } else {
+      throw new Error(`Product ${productId} not found and unknown.`);
+    }
+  }
+
+  // Find the minus button
+  const minusBtn = card.locator(".icon-minus").first();
+  let minusClickable;
+  if (await minusBtn.count() > 0) {
+    minusClickable = minusBtn.locator("..");
+  } else {
+    minusClickable = card.locator("text='-'").first();
+  }
+
+  if (await minusClickable.isVisible().catch(() => false)) {
+    for (let i = 0; i < quantity; i++) {
+      await minusClickable.click();
+      log(`Decrementing quantity for ${productId} (${i + 1}/${quantity}).`);
+      await page.waitForTimeout(500);
+
+      // If ADD button reappears, item is fully removed
+      if (await card.locator("div").filter({ hasText: "ADD" }).last().isVisible().catch(() => false)) {
+        log(`Item ${productId} completely removed from cart.`);
+        break;
+      }
+    }
+    return { success: true };
+  } else {
+    throw new Error(`Item ${productId} is not in cart (no '-' button found).`);
   }
 }
 
-export async function removeFromCart(page: Page, _productId: string): Promise<boolean> {
-  try {
-    await waitAndClick(page, SELECTORS.CART_REMOVE, 5000);
-    await page.waitForTimeout(1000);
-    return true;
-  } catch {
-    return false;
+/**
+ * Clear entire cart by clicking minus on all items in the cart drawer.
+ */
+export async function clearCart(page: Page): Promise<{ success: boolean; items_cleared: number }> {
+  const cartBtn = page.locator("div[class*='CartButton__Button'], div[class*='CartButton__Container']");
+  if (await cartBtn.count() > 0) {
+    await cartBtn.first().click();
+    await page.waitForTimeout(2000);
   }
-}
-
-export async function clearCart(page: Page): Promise<number> {
-  await page.goto(`${BLINKIT_BASE_URL}/checkout/cart`, {
-    waitUntil: "domcontentloaded",
-  });
-  await page.waitForTimeout(2000);
 
   let removed = 0;
-  const removeButtons = page.locator(SELECTORS.CART_REMOVE);
-  let count = await removeButtons.count();
-
-  while (count > 0) {
-    await removeButtons.first().click();
-    await page.waitForTimeout(1000);
-    removed++;
-    count = await removeButtons.count();
-  }
-
-  // Also try clicking minus until empty
-  const minusButtons = page.locator(SELECTORS.CART_MINUS);
-  let minusCount = await minusButtons.count();
-  while (minusCount > 0) {
-    await minusButtons.first().click();
+  while (true) {
+    const minusBtns = page.locator(".icon-minus");
+    const btnCount = await minusBtns.count();
+    if (btnCount === 0) break;
+    await minusBtns.first().locator("..").click();
     await page.waitForTimeout(500);
     removed++;
-    minusCount = await minusButtons.count();
+    if (removed > 100) break; // Safety limit
   }
 
-  return removed;
+  return { success: true, items_cleared: removed };
 }

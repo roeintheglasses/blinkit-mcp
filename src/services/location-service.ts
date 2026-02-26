@@ -1,4 +1,9 @@
 import type { AppContext, Address } from "../types.ts";
+import {
+  setLocation as setLocationFlow,
+  getAddresses as getAddressesFlow,
+  selectAddress as selectAddressFlow,
+} from "../playwright/location-flow.ts";
 
 export class LocationService {
   private ctx: AppContext;
@@ -16,25 +21,16 @@ export class LocationService {
       throw new Error("Provide an address_query to search for a location");
     }
 
-    const result = await this.ctx.browserManager.sendCommand("setLocation", {
-      addressQuery: address_query,
-    });
-
-    if (!result.success) {
-      throw new Error(result.error ?? `Failed to set location to '${address_query}'. The address may not be recognized — try a more specific or different address.`);
-    }
+    const page = await this.ctx.browserManager.ensurePage();
+    await setLocationFlow(page, { addressQuery: address_query });
 
     return `Location set to: ${address_query}`;
   }
 
   async getSavedAddresses(): Promise<{ addresses: Address[]; hint?: string }> {
-    const result = await this.ctx.browserManager.sendCommand("getAddresses", {});
+    const page = await this.ctx.browserManager.ensurePage();
+    const data = await getAddressesFlow(page);
 
-    if (!result.success) {
-      throw new Error(result.error ?? "Failed to retrieve saved addresses. Your session may have expired — try checking login status.");
-    }
-
-    const data = result.data as { addresses: Address[]; hint?: string };
     return {
       addresses: data.addresses,
       ...(data.hint ? { hint: data.hint } : {}),
@@ -42,20 +38,8 @@ export class LocationService {
   }
 
   async selectAddress(index: number): Promise<string> {
-    const result = await this.ctx.browserManager.sendCommand("selectAddress", {
-      index,
-    });
-
-    if (!result.success) {
-      throw new Error(result.error ?? `Failed to select address at index ${index}. Use get_saved_addresses to see valid address indices.`);
-    }
-
-    const data = result.data as {
-      selected: boolean;
-      payment_ready?: boolean;
-      hint?: string;
-      skipped_steps?: string[];
-    };
+    const page = await this.ctx.browserManager.ensurePage();
+    const data = await selectAddressFlow(page, index);
 
     return data.hint ?? `Address at index ${index} selected`;
   }

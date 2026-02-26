@@ -9,7 +9,7 @@
   "main": "src/index.ts",
   "scripts": {
     "dev": "tsx src/index.ts",
-    "build": "tsc && cp ./scripts/playwright-bridge.ts ./dist/playwright-bridge.ts",
+    "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
@@ -18,7 +18,6 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^25.3.0",
-    "playwright": "^1.58.2",
     "tsx": "^4.21.0",
     "typescript": "^5.8.0",
     "vitest": "^3.0.0"
@@ -28,6 +27,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "playwright": "^1.58.2",
     "zod": "^4.3.6"
   }
 }

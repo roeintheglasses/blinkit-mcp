@@ -78,19 +78,6 @@ export interface SpendingCheckResult {
   exceeded_hard_limit: boolean;
 }
 
-export interface BridgeCommand {
-  id: string;
-  action: string;
-  params: Record<string, unknown>;
-}
-
-export interface BridgeResponse {
-  id: string;
-  success: boolean;
-  data?: unknown;
-  error?: string;
-}
-
 export interface AppContext {
   config: import("./config/schema.ts").BlinkitConfig;
   httpClient: import("./core/http-client.ts").BlinkitHttpClient;

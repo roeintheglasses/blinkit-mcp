@@ -10,7 +10,7 @@ export const setLocationTool = {
   },
   handler: async (input: { location_name: string }, ctx: AppContext) => {
     const locationService = new LocationService(ctx);
-    const result = await locationService.setLocation(input.location_name);
+    const result = await locationService.setLocation({ address_query: input.location_name });
 
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],

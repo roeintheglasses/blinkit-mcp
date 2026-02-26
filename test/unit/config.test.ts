@@ -7,7 +7,6 @@ describe("ConfigSchema", () => {
     expect(config.warn_threshold).toBe(500);
     expect(config.max_order_amount).toBe(2000);
     expect(config.headless).toBe(true);
-    expect(config.playwright_mode).toBe("bridge");
     expect(config.default_lat).toBeUndefined();
     expect(config.default_lon).toBeUndefined();
   });
@@ -51,12 +50,8 @@ describe("ConfigSchema", () => {
     expect(config.headless).toBe(false);
   });
 
-  test("accepts playwright_mode direct", () => {
-    const config = ConfigSchema.parse({ playwright_mode: "direct" });
-    expect(config.playwright_mode).toBe("direct");
-  });
-
-  test("rejects invalid playwright_mode", () => {
-    expect(() => ConfigSchema.parse({ playwright_mode: "invalid" })).toThrow();
+  test("accepts debug mode", () => {
+    const config = ConfigSchema.parse({ debug: true });
+    expect(config.debug).toBe(true);
   });
 });

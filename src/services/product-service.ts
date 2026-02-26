@@ -1,5 +1,11 @@
 import type { AppContext, Product, ProductDetails } from "../types.ts";
 import { ENDPOINTS } from "../constants.ts";
+import {
+  searchProducts as searchProductsFlow,
+  getProductDetails as getProductDetailsFlow,
+  browseCategories as browseCategoriesFlow,
+  browseCategoryProducts as browseCategoryProductsFlow,
+} from "../playwright/search-flow.ts";
 
 export class ProductService {
   private ctx: AppContext;
@@ -98,13 +104,12 @@ export class ProductService {
     }
 
     // Playwright fallback
-    const result = await this.ctx.browserManager.sendCommand("search", { query, limit });
-    if (!result.success) {
-      throw new Error(result.error ?? `Product search for '${query}' failed. Try a different search term or check if Blinkit is available at your location.`);
-    }
-
-    const data = result.data as { products: Product[] };
-    return { products: data.products, total_results: data.products.length };
+    const page = await this.ctx.browserManager.ensurePage();
+    const products = await searchProductsFlow(page, query, limit);
+    return {
+      products: products as unknown as Product[],
+      total_results: products.length,
+    };
   }
 
   async getDetails(productId: string): Promise<ProductDetails> {
@@ -146,12 +151,9 @@ export class ProductService {
     }
 
     // Playwright fallback
-    const result = await this.ctx.browserManager.sendCommand("getProductDetails", { productId });
-    if (!result.success) {
-      throw new Error(result.error ?? `Could not fetch details for product '${productId}'. The product may be unavailable or the ID may be incorrect.`);
-    }
+    const page = await this.ctx.browserManager.ensurePage();
+    const data = await getProductDetailsFlow(page, productId);
 
-    const data = result.data as Record<string, unknown>;
     return {
       id: productId,
       name: (data.name as string) ?? "Unknown",
@@ -189,13 +191,8 @@ export class ProductService {
     }
 
     // Playwright fallback
-    const result = await this.ctx.browserManager.sendCommand("browseCategories", {});
-    if (!result.success) {
-      throw new Error(result.error ?? "Failed to load product categories. Blinkit may be temporarily unavailable — try again shortly.");
-    }
-
-    const data = result.data as { categories: { id: string; name: string; icon_url?: string }[] };
-    return data.categories;
+    const page = await this.ctx.browserManager.ensurePage();
+    return browseCategoriesFlow(page);
   }
 
   async browseCategory(
@@ -233,12 +230,11 @@ export class ProductService {
     }
 
     // Playwright fallback
-    const result = await this.ctx.browserManager.sendCommand("browseCategory", { categoryId, limit });
-    if (!result.success) {
-      throw new Error(result.error ?? `Failed to load products for category '${categoryId}'. The category may not exist or Blinkit may be temporarily unavailable.`);
-    }
-
-    const data = result.data as { products: Product[] };
-    return { products: data.products, total_results: data.products.length };
+    const page = await this.ctx.browserManager.ensurePage();
+    const products = await browseCategoryProductsFlow(page, categoryId, limit);
+    return {
+      products: products as unknown as Product[],
+      total_results: products.length,
+    };
   }
 }

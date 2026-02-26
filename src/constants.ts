@@ -33,9 +33,7 @@ export const RATE_LIMIT = {
 } as const;
 
 export const TIMEOUTS = {
-  BRIDGE_COMMAND: 60_000,
   HTTP_REQUEST: 15_000,
-  BRIDGE_STARTUP: 10_000,
 } as const;
 
 export const CONFIG_DIR = ".blinkit-mcp";

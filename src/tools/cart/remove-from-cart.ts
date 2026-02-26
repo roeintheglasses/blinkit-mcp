@@ -18,7 +18,7 @@ export const removeFromCartTool = {
     }
 
     const cartService = new CartService(ctx);
-    const result = await cartService.removeItem(input.product_id, input.quantity);
+    const result = await cartService.removeFromCart(input.product_id, input.quantity);
 
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],

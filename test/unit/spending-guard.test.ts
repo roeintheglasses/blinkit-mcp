@@ -6,7 +6,8 @@ describe("SpendingGuard", () => {
     warn_threshold: 500,
     max_order_amount: 2000,
     headless: true,
-    playwright_mode: "bridge",
+    debug: false,
+    slow_mo: 0,
   });
 
   test("allows under warning threshold", () => {
@@ -60,7 +61,8 @@ describe("SpendingGuard", () => {
       warn_threshold: 100,
       max_order_amount: 500,
       headless: true,
-      playwright_mode: "bridge",
+      debug: false,
+      slow_mo: 0,
     });
 
     expect(customGuard.check(50).warning).toBeUndefined();

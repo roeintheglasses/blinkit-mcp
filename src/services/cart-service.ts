@@ -1,4 +1,11 @@
 import type { AppContext, Cart } from "../types.ts";
+import {
+  getCart as getCartFlow,
+  addToCart as addToCartFlow,
+  updateCartItem as updateCartItemFlow,
+  removeFromCart as removeFromCartFlow,
+  clearCart as clearCartFlow,
+} from "../playwright/cart-flow.ts";
 
 export class CartService {
   private ctx: AppContext;
@@ -8,17 +15,8 @@ export class CartService {
   }
 
   async getCart(): Promise<Cart> {
-    const result = await this.ctx.browserManager.sendCommand("getCart", {});
-    if (!result.success) {
-      throw new Error(result.error ?? "Failed to retrieve cart contents. Your session may have expired — try checking login status.");
-    }
-
-    const data = result.data as {
-      items: Cart["items"];
-      subtotal: number;
-      delivery_fee: number;
-      total: number;
-    };
+    const page = await this.ctx.browserManager.ensurePage();
+    const data = await getCartFlow(page);
 
     const cart: Cart = {
       items: data.items,
@@ -48,27 +46,18 @@ export class CartService {
     limit_reached?: boolean;
     spending_warning?: string;
   }> {
-    const result = await this.ctx.browserManager.sendCommand("addToCart", {
-      productId,
-      quantity,
-    });
-
-    if (!result.success) {
-      throw new Error(result.error ?? `Failed to add product '${productId}' to cart. The product may be out of stock or unavailable at your location.`);
-    }
-
-    const bridgeData = result.data as { limit_reached?: boolean } | undefined;
+    const page = await this.ctx.browserManager.ensurePage();
+    const result = await addToCartFlow(page, productId, quantity);
 
     // Get updated cart to check spending
     const cart = await this.getCart();
     const spendingCheck = this.ctx.spendingGuard.check(cart.total);
 
     return {
-      success: true,
+      success: result.success,
       cart_total: cart.total,
-      item_name: cart.items[cart.items.length - 1]?.name ?? "Item",
-      quantity_added: quantity,
-      ...(bridgeData?.limit_reached ? { limit_reached: true } : {}),
+      item_name: result.item_name,
+      quantity_added: result.quantity_added,
       spending_warning: spendingCheck.warning,
     };
   }
@@ -77,15 +66,8 @@ export class CartService {
     productId: string,
     quantity: number
   ): Promise<Cart> {
-    const result = await this.ctx.browserManager.sendCommand("updateCartItem", {
-      productId,
-      quantity,
-    });
-
-    if (!result.success) {
-      throw new Error(result.error ?? `Failed to update quantity for product '${productId}'. The item may no longer be in your cart or is out of stock.`);
-    }
-
+    const page = await this.ctx.browserManager.ensurePage();
+    await updateCartItemFlow(page, productId, quantity);
     return this.getCart();
   }
 
@@ -93,14 +75,8 @@ export class CartService {
     productId: string,
     quantity = 1
   ): Promise<{ success: boolean; removed_item: string; new_cart_total: number }> {
-    const result = await this.ctx.browserManager.sendCommand("removeFromCart", {
-      productId,
-      quantity,
-    });
-
-    if (!result.success) {
-      throw new Error(result.error ?? `Failed to remove product '${productId}' from cart. The item may have already been removed.`);
-    }
+    const page = await this.ctx.browserManager.ensurePage();
+    await removeFromCartFlow(page, productId, quantity);
 
     const cart = await this.getCart();
     return {
@@ -111,16 +87,12 @@ export class CartService {
   }
 
   async clearCart(): Promise<{ success: boolean; items_removed_count: number }> {
-    const result = await this.ctx.browserManager.sendCommand("clearCart", {});
+    const page = await this.ctx.browserManager.ensurePage();
+    const result = await clearCartFlow(page);
 
-    if (!result.success) {
-      throw new Error(result.error ?? "Failed to clear cart. Your session may have expired — try checking login status.");
-    }
-
-    const data = result.data as { items_removed: number };
     return {
-      success: true,
-      items_removed_count: data.items_removed,
+      success: result.success,
+      items_removed_count: result.items_cleared,
     };
   }
 }

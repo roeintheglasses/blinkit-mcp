@@ -1,5 +1,7 @@
 import { existsSync } from "fs";
 import type { AppContext } from "../types.ts";
+import { checkLoggedIn } from "../playwright/helpers.ts";
+import { loginFlow, enterOtpFlow } from "../playwright/auth-flow.ts";
 
 export class AuthService {
   private ctx: AppContext;
@@ -27,15 +29,13 @@ export class AuthService {
 
     // Browser is running (or being launched) — do a UI-based login check
     try {
-      const result = await this.ctx.browserManager.sendCommand("isLoggedIn", {});
-      if (result.success && result.data) {
-        const loggedIn = (result.data as { loggedIn: boolean }).loggedIn;
-        if (loggedIn) {
-          await this.ctx.browserManager.sendCommand("saveSession", {});
-        }
-        this.ctx.sessionManager.setLoggedIn(loggedIn);
-        return { loggedIn, phone: this.ctx.sessionManager.getPhone() };
+      const page = await this.ctx.browserManager.ensurePage();
+      const loggedIn = await checkLoggedIn(page);
+      if (loggedIn) {
+        await this.ctx.browserManager.saveStorageState();
       }
+      this.ctx.sessionManager.setLoggedIn(loggedIn);
+      return { loggedIn, phone: this.ctx.sessionManager.getPhone() };
     } catch (e) {
       this.ctx.logger.debug("UI login check failed, using cached state", e);
     }
@@ -51,19 +51,17 @@ export class AuthService {
 
     // Check if already logged in
     try {
-      const statusResult = await this.ctx.browserManager.sendCommand("isLoggedIn", {});
-      if (statusResult.success && (statusResult.data as { loggedIn: boolean }).loggedIn) {
+      const page = await this.ctx.browserManager.ensurePage();
+      const loggedIn = await checkLoggedIn(page);
+      if (loggedIn) {
         return "Already logged in with valid session.";
       }
     } catch {
       // Continue with login
     }
 
-    const result = await this.ctx.browserManager.sendCommand("login", { phoneNumber });
-
-    if (!result.success) {
-      throw new Error(result.error ?? `Login failed for phone number '${phoneNumber}'. Check that the number is valid and Blinkit is accessible.`);
-    }
+    const page = await this.ctx.browserManager.ensurePage();
+    await loginFlow(page, phoneNumber);
 
     this.ctx.sessionManager.setLoggedIn(false, phoneNumber);
     return "OTP sent to your phone. Use the enter_otp tool to complete login.";
@@ -72,13 +70,11 @@ export class AuthService {
   async enterOtp(otp: string): Promise<string> {
     this.ctx.logger.info("Entering OTP");
 
-    const result = await this.ctx.browserManager.sendCommand("enterOtp", { otp });
+    const page = await this.ctx.browserManager.ensurePage();
+    const context = await this.ctx.browserManager.getContext();
+    const storageStatePath = this.ctx.browserManager.getStorageStatePath();
 
-    if (!result.success) {
-      throw new Error(result.error ?? "OTP verification failed. The OTP may have expired or been entered incorrectly — try logging in again to get a new OTP.");
-    }
-
-    const data = result.data as { logged_in: boolean };
+    const data = await enterOtpFlow(page, context, otp, storageStatePath);
     this.ctx.logger.info(`OTP result: logged_in=${data.logged_in}`);
 
     if (data.logged_in) {
