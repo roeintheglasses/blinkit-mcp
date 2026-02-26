@@ -6,19 +6,22 @@
   "bin": {
     "blinkit-mcp": "./dist/index.js"
   },
-  "main": "dist/index.js",
+  "main": "src/index.ts",
   "scripts": {
-    "dev": "bun run src/index.ts",
-    "build": "bun build ./src/index.ts --target node --outdir ./dist && cp ./scripts/playwright-bridge.ts ./dist/playwright-bridge.ts",
-    "test": "bun test"
+    "dev": "tsx src/index.ts",
+    "build": "tsc && cp ./scripts/playwright-bridge.ts ./dist/playwright-bridge.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": ["mcp", "blinkit", "grocery", "ai", "claude"],
   "license": "MIT",
   "devDependencies": {
-    "@types/bun": "latest",
     "@types/node": "^25.3.0",
     "playwright": "^1.58.2",
-    "tsx": "^4.21.0"
+    "tsx": "^4.21.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
   },
   "peerDependencies": {
     "typescript": "^5"

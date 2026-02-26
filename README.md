@@ -2,7 +2,7 @@
 
 An MCP (Model Context Protocol) server that wraps [blinkit.com](https://blinkit.com/) -- India's quick-commerce grocery delivery platform -- enabling AI assistants to search products, manage cart, and place orders.
 
-Blinkit has no public API. This server uses a hybrid approach: direct HTTP calls where possible, and Playwright browser automation as a fallback. Playwright runs in a separate Node.js subprocess (via `tsx`) because it has known incompatibilities with Bun.
+Blinkit has no public API. This server uses a hybrid approach: direct HTTP calls where possible, and Playwright browser automation as a fallback. Playwright runs in a separate subprocess (via `tsx`) to isolate browser automation from the main MCP server process.
 
 ## Features
 
@@ -16,8 +16,8 @@ Blinkit has no public API. This server uses a hybrid approach: direct HTTP calls
 
 ## Prerequisites
 
-- [Bun](https://bun.sh/) v1.0 or later (runtime and package manager)
-- [Node.js](https://nodejs.org/) v18 or later (required for the Playwright bridge subprocess)
+- [Node.js](https://nodejs.org/) v18 or later
+- [pnpm](https://pnpm.io/) v8 or later
 - A Blinkit account (Indian phone number for OTP login)
 
 ## Installation
@@ -32,7 +32,7 @@ Blinkit has no public API. This server uses a hybrid approach: direct HTTP calls
 2. Install dependencies:
 
    ```bash
-   bun install
+   pnpm install
    ```
 
 3. Install Playwright with Firefox (the bridge uses Firefox):
@@ -71,8 +71,8 @@ Add the following to your `claude_desktop_config.json`:
 {
   "mcpServers": {
     "blinkit": {
-      "command": "bun",
-      "args": ["run", "/absolute/path/to/blinkit-mcp/src/index.ts"]
+      "command": "npx",
+      "args": ["tsx", "/absolute/path/to/blinkit-mcp/src/index.ts"]
     }
   }
 }
@@ -83,7 +83,7 @@ Add the following to your `claude_desktop_config.json`:
 Run the following command:
 
 ```bash
-claude mcp add blinkit -- bun run /absolute/path/to/blinkit-mcp/src/index.ts
+claude mcp add blinkit -- npx tsx /absolute/path/to/blinkit-mcp/src/index.ts
 ```
 
 ### Generic MCP Client
@@ -91,7 +91,7 @@ claude mcp add blinkit -- bun run /absolute/path/to/blinkit-mcp/src/index.ts
 Use stdio transport with the following command:
 
 ```
-bun run /absolute/path/to/blinkit-mcp/src/index.ts
+npx tsx /absolute/path/to/blinkit-mcp/src/index.ts
 ```
 
 Replace `/absolute/path/to/blinkit-mcp` with the actual path where you cloned the repository.
@@ -190,7 +190,7 @@ Each tool can have either an HTTP or Playwright implementation. The architecture
 
 ### Playwright Bridge
 
-Playwright has known incompatibilities with the Bun runtime. To work around this, browser automation runs in a **separate Node.js subprocess** (`scripts/playwright-bridge.ts`) executed via `tsx`. The main MCP server communicates with this subprocess over stdin/stdout using a JSON command-response protocol.
+Browser automation runs in a **separate Node.js subprocess** (`scripts/playwright-bridge.ts`) executed via `tsx`. This isolates Playwright from the main MCP server process. The server communicates with this subprocess over stdin/stdout using a JSON command-response protocol.
 
 The bridge process is started on demand, includes health checks, and automatically restarts if it crashes.
 
@@ -201,7 +201,7 @@ MCP Client (Claude, etc.)
         |
    stdio transport
         |
-   MCP Server (Bun)
+   MCP Server (Node.js)
         |
    +----+----+
    |         |

@@ -19,8 +19,8 @@ This guide covers everything you need to contribute to the blinkit-mcp project: 
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) (latest stable)
-- Node.js (required by the Playwright bridge -- see [Architecture Overview](#architecture-overview))
+- [Node.js](https://nodejs.org/) v18 or later
+- [pnpm](https://pnpm.io/) v8 or later
 - Git
 
 ### Setup
@@ -35,7 +35,7 @@ This guide covers everything you need to contribute to the blinkit-mcp project: 
 2. Install dependencies:
 
    ```bash
-   bun install
+   pnpm install
    ```
 
 3. Install Playwright's Firefox browser (the only browser this project uses):
@@ -47,7 +47,7 @@ This guide covers everything you need to contribute to the blinkit-mcp project: 
 4. Run the test suite to verify everything works:
 
    ```bash
-   bun test
+   pnpm test
    ```
 
 ---
@@ -133,9 +133,9 @@ Low-level infrastructure shared across all services:
 
 ### Layer 4: Playwright Bridge (`scripts/playwright-bridge.ts`)
 
-A standalone Node.js process that runs Playwright. The main MCP server (running on Bun) communicates with it via JSON messages over stdin/stdout.
+A standalone subprocess that runs Playwright. The main MCP server communicates with it via JSON messages over stdin/stdout.
 
-**Why a separate process?** Playwright has known incompatibilities with Bun, including segfaults and child process issues. Running the bridge as a separate Node.js process (via `tsx`) avoids these problems entirely. The `BrowserManager` class in `src/core/browser-manager.ts` handles spawning, health-checking, and communicating with this process.
+**Why a separate process?** Running the Playwright bridge as a separate subprocess (via `tsx`) isolates browser automation from the main MCP server process. The `BrowserManager` class in `src/core/browser-manager.ts` handles spawning, health-checking, and communicating with this process.
 
 ### Shared Types (`src/types.ts`)
 
@@ -371,7 +371,7 @@ Symptoms:
 ### Testing selector changes
 
 1. Set `debug: true` and `headless: false` in your `~/.blinkit-mcp/config.json` to watch the browser.
-2. Run the MCP server in dev mode: `bun run dev`.
+2. Run the MCP server in dev mode: `pnpm run dev`.
 3. Trigger the relevant tool from an MCP client and observe the browser behavior.
 4. Verify the tool returns correct, well-structured data.
 
@@ -382,10 +382,10 @@ Symptoms:
 ### Running tests
 
 ```bash
-bun test
+pnpm test
 ```
 
-Tests use `bun:test` (Bun's built-in test runner). Test files live in `test/` and follow the pattern `test/unit/<module>.test.ts`.
+Tests use vitest. Test files live in `test/` and follow the pattern `test/unit/<module>.test.ts`.
 
 ### What is tested
 
@@ -404,18 +404,18 @@ Tools and services interact with external systems (Blinkit's API, a browser). Te
 **Mocking BrowserManager:**
 
 ```typescript
-import { describe, test, expect, mock } from "bun:test";
+import { describe, test, expect, vi } from "vitest";
 
 const mockBrowserManager = {
-  sendCommand: mock(() =>
+  sendCommand: vi.fn(() =>
     Promise.resolve({
       id: "test-id",
       success: true,
       data: { products: [{ id: "1", name: "Milk", price: 50 }] },
     })
   ),
-  ensureReady: mock(() => Promise.resolve()),
-  isRunning: mock(() => true),
+  ensureReady: vi.fn(() => Promise.resolve()),
+  isRunning: vi.fn(() => true),
 };
 ```
 
@@ -423,10 +423,10 @@ const mockBrowserManager = {
 
 ```typescript
 const mockHttpClient = {
-  get: mock(() =>
+  get: vi.fn(() =>
     Promise.resolve({ ok: true, data: { products: [] } })
   ),
-  post: mock(() =>
+  post: vi.fn(() =>
     Promise.resolve({ ok: true, data: {} })
   ),
 };
@@ -441,8 +441,8 @@ const mockCtx = {
   httpClient: mockHttpClient,
   browserManager: mockBrowserManager,
   sessionManager: new SessionManager(new Logger("error")),
-  rateLimiter: { acquire: mock(() => Promise.resolve()) },
-  spendingGuard: { check: mock(() => ({ allowed: true })) },
+  rateLimiter: { acquire: vi.fn(() => Promise.resolve()) },
+  spendingGuard: { check: vi.fn(() => ({ allowed: true })) },
   logger: new Logger("error"),
   config: { /* minimal config */ },
 } as unknown as AppContext;
@@ -476,7 +476,7 @@ Test the service layer directly. Verify that it calls the HTTP client first, fal
 
 ### Imports
 
-- Use `.ts` extensions in import paths (Bun requires this).
+- Use `.ts` extensions in import paths.
 - Use `type` imports for type-only imports: `import type { Foo } from "./bar.ts"`.
 
 ### General conventions
@@ -501,7 +501,7 @@ Test the service layer directly. Verify that it calls the HTTP client first, fal
 3. Run the full test suite and confirm it passes:
 
    ```bash
-   bun test
+   pnpm test
    ```
 
 4. Commit with a clear, concise message describing what changed and why.
@@ -511,6 +511,6 @@ Test the service layer directly. Verify that it calls the HTTP client first, fal
    - Describe what the change does and why it is needed.
    - List any new tools, services, or bridge commands added.
    - Note if selectors were updated and how you verified them.
-   - Include test results (paste the output of `bun test`).
+   - Include test results (paste the output of `pnpm test`).
 
 6. Respond to review feedback. Keep discussion focused on the code.

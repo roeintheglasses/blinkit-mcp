@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect } from "vitest";
 import { SessionManager } from "../../src/core/session-manager.ts";
 import { Logger } from "../../src/core/logger.ts";
 

@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect } from "vitest";
 import { SpendingGuard } from "../../src/services/spending-guard.ts";
 
 describe("SpendingGuard", () => {
