@@ -1,0 +1,10 @@
+src/
+test/
+scripts/
+.git/
+.github/
+.claude/
+*.md
+!README.md
+tsconfig.json
+bun.lockb

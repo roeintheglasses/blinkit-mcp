@@ -1,0 +1,30 @@
+{
+  "name": "blinkit-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Blinkit grocery delivery — search products, manage cart, and place orders via AI assistants",
+  "type": "module",
+  "bin": {
+    "blinkit-mcp": "./dist/index.js"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "bun build ./src/index.ts --target node --outdir ./dist && cp ./scripts/playwright-bridge.ts ./dist/playwright-bridge.ts",
+    "test": "bun test"
+  },
+  "keywords": ["mcp", "blinkit", "grocery", "ai", "claude"],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^25.3.0",
+    "playwright": "^1.58.2",
+    "tsx": "^4.21.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "zod": "^4.3.6"
+  }
+}
