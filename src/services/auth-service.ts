@@ -1,3 +1,4 @@
+import { existsSync } from "fs";
 import type { AppContext } from "../types.ts";
 
 export class AuthService {
@@ -8,15 +9,23 @@ export class AuthService {
   }
 
   async checkLoginStatus(): Promise<{ loggedIn: boolean; phone: string | null }> {
-    // If browser isn't running, use cached session state to avoid launching a browser just for a status check
+    // If browser isn't running, check if we have saved cookies to verify against
     if (!this.ctx.browserManager.isRunning()) {
-      return {
-        loggedIn: this.ctx.sessionManager.isAuthenticated(),
-        phone: this.ctx.sessionManager.getPhone(),
-      };
+      const hasStorageState = existsSync(this.ctx.browserManager.getStorageStatePath());
+
+      if (!hasStorageState) {
+        // No saved browser state — return cached session
+        return {
+          loggedIn: this.ctx.sessionManager.isAuthenticated(),
+          phone: this.ctx.sessionManager.getPhone(),
+        };
+      }
+
+      // Storage state exists — launch browser to verify login
+      this.ctx.logger.info("Saved cookies found, launching browser to verify login status");
     }
 
-    // Browser is running — do a UI-based login check
+    // Browser is running (or being launched) — do a UI-based login check
     try {
       const result = await this.ctx.browserManager.sendCommand("isLoggedIn", {});
       if (result.success && result.data) {
@@ -72,13 +81,15 @@ export class AuthService {
     const data = result.data as { logged_in: boolean };
     this.ctx.logger.info(`OTP result: logged_in=${data.logged_in}`);
 
-    this.ctx.sessionManager.setLoggedIn(data.logged_in);
-
-    if (!data.logged_in) {
-      throw new Error("OTP entered but login could not be verified. Check the browser window.");
+    if (data.logged_in) {
+      this.ctx.sessionManager.setLoggedIn(true);
+      return "Successfully logged in!";
     }
 
-    return "Successfully logged in!";
+    // OTP was entered but we couldn't confirm login via UI — don't overwrite
+    // session as false since the cookies may still be valid (storage state was saved).
+    // Next checkLoginStatus call will verify properly.
+    return "OTP entered. Login could not be confirmed via UI — use check_login_status to verify.";
   }
 
   async logout(): Promise<void> {

@@ -393,17 +393,38 @@ async function handleCommand(command: BridgeCommand): Promise<void> {
 
         await debugStep(p, "Submitting OTP");
         await p.keyboard.press("Enter");
-        await p.waitForTimeout(5000);
+
+        // Wait for page to react to OTP submission
         await p.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
 
-        // Check login via UI state
-        const loggedIn = await checkLoggedIn(p);
+        // Retry checkLoggedIn with delays — the page may be in transition
+        // (success animation, location popup, redirect) right after OTP
+        let loggedIn = false;
+        for (let attempt = 0; attempt < 5; attempt++) {
+          loggedIn = await checkLoggedIn(p);
+          if (loggedIn) break;
+          log(`Login check attempt ${attempt + 1}/5: not detected yet, waiting...`);
+          await p.waitForTimeout(2000);
+        }
+
+        // Fallback: check if auth cookies exist even if UI indicators aren't visible
+        // (e.g., location popup or overlay is blocking "My Account")
+        if (!loggedIn && context) {
+          const cookies = await context.cookies("https://blinkit.com");
+          const hasAuthCookie = cookies.some(
+            (c) => c.name === "auth_key" || c.name === "access_token" || c.name === "_session_token"
+          );
+          if (hasAuthCookie) {
+            log("UI check failed but auth cookies found — treating as logged in");
+            loggedIn = true;
+          }
+        }
+
         log(`OTP verification: loggedIn=${loggedIn}`);
 
-        // Save session if logged in
-        if (loggedIn) {
-          await saveStorageState();
-        }
+        // Always save storage state after OTP — even if we can't confirm login,
+        // the cookies may still be valid
+        await saveStorageState();
 
         respond({
           id,
@@ -418,150 +439,263 @@ async function handleCommand(command: BridgeCommand): Promise<void> {
         const query = params.query as string;
         const limit = (params.limit as number) || 10;
         currentQuery = query;
+        let products: Array<Record<string, unknown>> = [];
 
         await debugStep(p, `Searching for: "${query}"`);
 
-        // Navigate to blinkit home first if not already there
-        if (!p.url().includes("blinkit.com")) {
-          await p.goto("https://blinkit.com", { waitUntil: "domcontentloaded", timeout: 60000 });
-          await p.waitForTimeout(2000);
-        }
+        // ── Helper: batch-parse product cards from DOM in a single evaluate call ──
+        async function batchParseCards(page: Page, lim: number): Promise<Array<Record<string, unknown>>> {
+          return page.evaluate((lim: number) => {
+            const cards = document.querySelectorAll("div[role='button']");
+            const results: any[] = [];
+            for (const card of cards) {
+              const text = card.textContent || "";
+              if (!text.includes("ADD") || !text.includes("₹")) continue;
+              if (results.length >= lim) break;
 
-        // 1. Activate Search — use search bar UI flow (reference impl)
-        await debugStep(p, "Activating search bar");
-        if (await p.isVisible("a[href='/s/']")) {
-          await p.click("a[href='/s/']");
-        } else if (await p.isVisible("div[class*='SearchBar__PlaceholderContainer']")) {
-          await p.click("div[class*='SearchBar__PlaceholderContainer']");
-        } else if (await p.isVisible("input[placeholder*='Search']")) {
-          await p.click("input[placeholder*='Search']");
-        } else {
-          try {
-            await p.click("text='Search'", { timeout: 3000 });
-          } catch {
-            log("Search bar not found, navigating directly to search URL");
-            await p.goto(`https://blinkit.com/s/?q=${encodeURIComponent(query)}`, {
-              waitUntil: "domcontentloaded",
-              timeout: 60000,
-            });
-            await p.waitForTimeout(2000);
-          }
-        }
+              const id = card.id || `unknown-${results.length}`;
+              const nameEl = card.querySelector("div[class*='line-clamp-2']") ??
+                             card.querySelector("div[class*='line-clamp']");
+              const name = nameEl?.textContent?.trim() ||
+                           text.split("\n").find(l => l.trim()) || "Unknown Product";
 
-        // 2. Type and Submit
-        await debugStep(p, `Typing search query: "${query}"`);
-        try {
-          const searchInput = await p.waitForSelector(
-            "input[placeholder*='Search'], input[type='text']",
-            { state: "visible", timeout: 30000 }
-          );
-          if (searchInput) {
-            await searchInput.fill(query);
-            await p.waitForTimeout(300);
-            await debugStep(p, "Pressing Enter to search");
-            await p.keyboard.press("Enter");
-          }
-        } catch (e) {
-          log(`Search input not found, may have used direct URL: ${e}`);
-        }
-
-        // 3. Wait for results
-        await debugStep(p, "Waiting for search results");
-        let noResults = false;
-        try {
-          await p.waitForSelector("div[role='button']:has-text('ADD')", { timeout: 30000 });
-          log("Search results loaded.");
-        } catch {
-          log("Timed out waiting for product cards. Checking for 'No results'...");
-          if (await p.isVisible("text='No results found'").catch(() => false) ||
-              await p.isVisible("text=/no results/i").catch(() => false)) {
-            log("No results found for this query.");
-            noResults = true;
-          } else {
-            log("Could not detect standard product cards.");
-          }
-        }
-        await p.waitForTimeout(1000);
-
-        if (noResults) {
-          respond({ id, success: true, data: { products: [], no_results: true } });
-          break;
-        }
-
-        // 4. Parse results — div[role='button'] filtered by ADD and ₹ (reference impl)
-        await debugStep(p, "Extracting product data from cards");
-        const products: Array<Record<string, unknown>> = [];
-        const cards = p.locator("div[role='button']").filter({ hasText: "ADD" }).filter({ hasText: "₹" });
-        const cardCount = Math.min(await cards.count(), limit);
-        log(`Found ${cardCount} product cards.`);
-
-        for (let i = 0; i < cardCount; i++) {
-          try {
-            const card = cards.nth(i);
-            const textContent = await card.innerText();
-
-            // Extract ID from card's id attribute
-            const productId = await card.getAttribute("id") ?? `unknown-${i}`;
-
-            // Extract Name — use line-clamp-2 (reference impl)
-            const nameLocator = card.locator("div[class*='line-clamp-2']");
-            let name = "Unknown Product";
-            if (await nameLocator.count() > 0) {
-              name = (await nameLocator.first().innerText()).trim();
-            } else {
-              const broadNameLocator = card.locator("div[class*='line-clamp']");
-              if (await broadNameLocator.count() > 0) {
-                name = (await broadNameLocator.first().innerText()).trim();
-              } else {
-                const lines = textContent.split("\n").filter((l: string) => l.trim());
-                name = lines[0] ?? "Unknown Product";
-              }
-            }
-
-            // Store in known products for cart recovery
-            if (productId !== `unknown-${i}`) {
-              knownProducts.set(productId, { sourceQuery: currentQuery, name });
-            }
-
-            // Extract Price as raw string (reference impl)
-            let priceStr = "Unknown Price";
-            let priceNum = 0;
-            if (textContent.includes("₹")) {
-              for (const part of textContent.split("\n")) {
-                if (part.includes("₹")) {
-                  priceStr = part.trim();
-                  priceNum = extractPrice(part);
+              let price = 0;
+              let priceDisplay = "Unknown Price";
+              for (const line of text.split("\n")) {
+                if (line.includes("₹")) {
+                  priceDisplay = line.trim();
+                  price = parseFloat(line.replace(/[^0-9.]/g, "")) || 0;
                   break;
                 }
               }
+
+              const weightEl = card.querySelector("div[class*='plp-product__quantity'], div[class*='Weight']");
+              const unit = weightEl?.textContent?.trim() || "";
+              const img = card.querySelector("img");
+              const imgSrc = img?.getAttribute("src") || "";
+
+              results.push({
+                index: results.length, id, name, price, price_display: priceDisplay,
+                mrp: price, unit, in_stock: true, image_url: imgSrc,
+              });
             }
+            return results;
+          }, lim);
+        }
 
-            // Extract weight/unit
-            const weightLocator = card.locator("div[class*='plp-product__quantity'], div[class*='Weight']");
-            const unit = await weightLocator.first().innerText().catch(() => "");
+        // ── Helper: parse products from the Blinkit layout/search API response ──
+        // Response shape: { response: { snippets: [ { widget_type, data: { ... } } ] } }
+        // Product snippets have widget_type "product_card_snippet_type_2".
+        // Best structured data is in data.atc_action.add_to_cart.cart_item.
+        function parseApiProducts(apiData: any, lim: number): Array<Record<string, unknown>> {
+          // Navigate to response.snippets (the API wraps it)
+          const snippets: any[] = apiData?.response?.snippets ?? apiData?.snippets ?? [];
+          if (snippets.length === 0) return [];
 
-            const imgSrc = await card.locator("img").first().getAttribute("src").catch(() => null);
+          const results: Array<Record<string, unknown>> = [];
+          let idx = 0;
+          for (const snippet of snippets) {
+            if (results.length >= lim) break;
+            if (snippet.widget_type !== "product_card_snippet_type_2") continue;
 
-            if (debugMode) {
-              await debugHighlight(p, `div[id='${productId}']`, "blue");
+            const d = snippet.data;
+            if (!d) continue;
+
+            // Prefer the structured cart_item data (has numeric price, unit, etc.)
+            const cartItem = d.atc_action?.add_to_cart?.cart_item;
+            if (cartItem) {
+              const productId = String(cartItem.product_id);
+              const name = cartItem.product_name ?? cartItem.display_name ?? "Unknown Product";
+              const price = cartItem.price ?? 0;
+              const mrp = cartItem.mrp ?? price;
+              const unit = cartItem.unit ?? "";
+              const inventory = cartItem.inventory ?? 0;
+              const imageUrl = cartItem.image_url ?? d.image?.url ?? "";
+              const brand = cartItem.brand ?? d.brand_name?.text ?? "";
+
+              knownProducts.set(productId, { sourceQuery: currentQuery, name });
+
+              results.push({
+                index: idx++,
+                id: productId,
+                name,
+                price,
+                price_display: d.normal_price?.text ?? `₹${price}`,
+                mrp,
+                unit,
+                in_stock: inventory > 0 && d.product_state !== "out_of_stock",
+                image_url: imageUrl,
+                brand,
+                inventory,
+              });
+            } else {
+              // Fallback: extract from snippet.data directly
+              const productId = d.product_id ?? d.identity?.id ?? d.meta?.product_id ?? `unknown-${idx}`;
+              const name = d.name?.text ?? d.display_name?.text ?? "Unknown Product";
+              const priceText = d.normal_price?.text ?? "";
+              const price = parseFloat(priceText.replace(/[^0-9.]/g, "")) || 0;
+              const mrpText = d.mrp?.text ?? priceText;
+              const mrp = parseFloat(mrpText.replace(/[^0-9.]/g, "")) || price;
+
+              if (String(productId) !== `unknown-${idx}`) {
+                knownProducts.set(String(productId), { sourceQuery: currentQuery, name });
+              }
+
+              results.push({
+                index: idx++,
+                id: String(productId),
+                name,
+                price,
+                price_display: priceText || `₹${price}`,
+                mrp,
+                unit: d.variant?.text ?? "",
+                in_stock: (d.inventory ?? 0) > 0 && d.product_state !== "out_of_stock",
+                image_url: d.image?.url ?? "",
+                brand: d.brand_name?.text ?? "",
+                inventory: d.inventory ?? 0,
+              });
             }
+          }
+          return results;
+        }
 
-            products.push({
-              index: i,
-              id: productId,
-              name,
-              price: priceNum,
-              price_display: priceStr,
-              mrp: priceNum,
-              unit: unit.trim(),
-              in_stock: true,
-              image_url: imgSrc ?? "",
-            });
-          } catch (e) {
-            log(`Error parsing card ${i}: ${e}`);
+        // ── Helper: check for "no results" state on page ──
+        async function checkNoResults(page: Page): Promise<boolean> {
+          return (await page.isVisible("text='No results found'").catch(() => false)) ||
+                 (await page.isVisible("text=/no results/i").catch(() => false));
+        }
+
+        // ── Helper: update known products map from DOM-parsed results ──
+        function updateKnownProducts(parsed: Array<Record<string, unknown>>): void {
+          for (const prod of parsed) {
+            if (prod.id && !(prod.id as string).startsWith("unknown-")) {
+              knownProducts.set(prod.id as string, { sourceQuery: currentQuery, name: prod.name as string });
+            }
           }
         }
 
+        // ═══════════════════════════════════════════════════════════════════
+        // STRATEGY 1: Direct URL navigation + API response interception
+        //   Fastest path — navigates to search URL and captures the XHR
+        //   response with structured JSON, avoiding all DOM parsing.
+        // ═══════════════════════════════════════════════════════════════════
+        try {
+          log("Strategy 1: Direct URL + API interception");
+          await debugStep(p, "Navigating directly to search URL");
+
+          // Listen for the search API response BEFORE navigating
+          // Actual endpoint: POST blinkit.com/v1/layout/search?q=...&search_type=type_to_search
+          const apiResponsePromise = p.waitForResponse(
+            (resp) => {
+              const url = resp.url();
+              return url.includes("/v1/layout/search") && url.includes("q=") && resp.status() === 200;
+            },
+            { timeout: 15000 }
+          ).catch(() => null);
+
+          await p.goto(`https://blinkit.com/s/?q=${encodeURIComponent(query)}`, {
+            waitUntil: "domcontentloaded",
+            timeout: 30000,
+          });
+
+          // Try parsing the intercepted API response
+          const apiResponse = await apiResponsePromise;
+          if (apiResponse) {
+            try {
+              const apiData = await apiResponse.json();
+              products = parseApiProducts(apiData, limit);
+              if (products.length > 0) {
+                log(`Strategy 1 success: ${products.length} products from API interception`);
+              }
+            } catch (e) {
+              log(`API response parse failed: ${e}`);
+            }
+          }
+
+          // API interception didn't yield results — try batch DOM parse on the same page
+          if (products.length === 0) {
+            log("API interception missed, trying batch DOM parse on direct URL page");
+            try {
+              await p.waitForSelector("div[role='button']:has-text('ADD')", { timeout: 10000 });
+              products = await batchParseCards(p, limit);
+              updateKnownProducts(products);
+              if (products.length > 0) {
+                log(`Strategy 1 (DOM fallback) success: ${products.length} products`);
+              }
+            } catch {
+              if (await checkNoResults(p)) {
+                log("No results found for this query.");
+                respond({ id, success: true, data: { products: [], no_results: true } });
+                break;
+              }
+              log("No product cards found on direct URL page.");
+            }
+          }
+        } catch (e) {
+          log(`Strategy 1 failed: ${e}`);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // STRATEGY 2 (fallback): UI search bar flow
+        //   Activates the search bar via clicks, types query, presses Enter.
+        //   Uses batch DOM parse to extract results.
+        // ═══════════════════════════════════════════════════════════════════
+        if (products.length === 0) {
+          log("Strategy 2: UI search bar flow (fallback)");
+          try {
+            // Navigate to homepage if not already there
+            if (!p.url().includes("blinkit.com")) {
+              await p.goto("https://blinkit.com", { waitUntil: "domcontentloaded", timeout: 60000 });
+              await p.waitForTimeout(2000);
+            }
+
+            // Activate search bar
+            await debugStep(p, "Activating search bar (fallback)");
+            if (await p.isVisible("a[href='/s/']")) {
+              await p.click("a[href='/s/']");
+            } else if (await p.isVisible("div[class*='SearchBar__PlaceholderContainer']")) {
+              await p.click("div[class*='SearchBar__PlaceholderContainer']");
+            } else if (await p.isVisible("input[placeholder*='Search']")) {
+              await p.click("input[placeholder*='Search']");
+            } else {
+              await p.click("text='Search'", { timeout: 3000 });
+            }
+
+            // Type and submit
+            const searchInput = await p.waitForSelector(
+              "input[placeholder*='Search'], input[type='text']",
+              { state: "visible", timeout: 30000 }
+            );
+            if (searchInput) {
+              await searchInput.fill(query);
+              await p.waitForTimeout(300);
+              await p.keyboard.press("Enter");
+            }
+
+            // Wait for results
+            try {
+              await p.waitForSelector("div[role='button']:has-text('ADD')", { timeout: 30000 });
+            } catch {
+              if (await checkNoResults(p)) {
+                log("No results found (fallback).");
+                respond({ id, success: true, data: { products: [], no_results: true } });
+                break;
+              }
+              log("Could not detect product cards (fallback).");
+            }
+
+            // Batch DOM parse
+            products = await batchParseCards(p, limit);
+            updateKnownProducts(products);
+            if (products.length > 0) {
+              log(`Strategy 2 success: ${products.length} products from UI flow`);
+            }
+          } catch (e) {
+            log(`Strategy 2 failed: ${e}`);
+          }
+        }
+
+        log(`Search complete: ${products.length} products found.`);
         respond({ id, success: true, data: { products } });
         break;
       }

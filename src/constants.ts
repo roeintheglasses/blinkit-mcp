@@ -5,7 +5,7 @@ export const BLINKIT_SEARCH_BASE = "https://blinkit.in";
 export const ENDPOINTS = {
   PRODUCT_DETAILS: (prid: string) =>
     `${BLINKIT_API_BASE}/v1/layout/product/${prid}`,
-  SEARCH: `${BLINKIT_SEARCH_BASE}/v5/search/products`,
+  SEARCH: `${BLINKIT_API_BASE}/v1/layout/search`,
   CATEGORIES: `${BLINKIT_API_BASE}/v2/categories`,
   CATEGORY_PRODUCTS: (categoryId: string) =>
     `${BLINKIT_API_BASE}/v6/category/products/${categoryId}`,
