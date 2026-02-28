@@ -355,18 +355,47 @@ export async function removeFromCart(
  * Clear entire cart by clicking minus on all items in the cart drawer.
  */
 export async function clearCart(page: Page): Promise<{ success: boolean; items_cleared: number }> {
-  const cartBtn = page.locator(SELECTORS.CART_BUTTON);
-  if (await cartBtn.count() > 0) {
-    await cartBtn.first().click();
-    await page.waitForTimeout(2000);
+  // Check if cart drawer is already open
+  const cartAlreadyOpen =
+    await page.isVisible(SELECTORS.BILL_DETAILS_REGEX).catch(() => false) ||
+    await page.locator(SELECTORS.CART_PRODUCT).count().then(c => c > 0).catch(() => false);
+
+  if (!cartAlreadyOpen) {
+    const cartBtn = page.locator(SELECTORS.CART_BUTTON);
+    if (await cartBtn.count() > 0) {
+      try {
+        await cartBtn.first().click({ force: true, timeout: 10000 });
+      } catch {
+        log("Cart button click failed, trying JS click...");
+        await cartBtn.first().evaluate((el: any) => el.click()).catch(() => {});
+      }
+      await page.waitForTimeout(2000);
+    }
+  } else {
+    log("Cart drawer is already open for clearing.");
   }
 
   let removed = 0;
   while (true) {
-    const minusBtns = page.locator(SELECTORS.ICON_MINUS);
-    const btnCount = await minusBtns.count();
-    if (btnCount === 0) break;
-    await minusBtns.first().locator("..").click();
+    // Try multiple selectors for minus buttons (they differ between product page and cart drawer)
+    let minusBtn = page.locator(SELECTORS.ICON_MINUS).first();
+    let found = await minusBtn.count() > 0;
+
+    // Fallback: look for minus buttons by text content within cart products
+    if (!found) {
+      minusBtn = page.locator(`${SELECTORS.CART_PRODUCT} button, ${SELECTORS.CART_PRODUCT} div`).filter({ hasText: /^[−\-]$/ }).first();
+      found = await minusBtn.count() > 0;
+    }
+
+    if (!found) break;
+
+    try {
+      await minusBtn.click({ force: true, timeout: 5000 });
+    } catch {
+      // JS click fallback
+      const clicked = await minusBtn.evaluate((el: any) => { el.click(); return true; }).catch(() => false);
+      if (!clicked) break;
+    }
     await page.waitForTimeout(500);
     removed++;
     if (removed > 100) break; // Safety limit
