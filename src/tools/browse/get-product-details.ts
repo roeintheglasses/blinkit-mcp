@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { AppContext } from "../../types.ts";
-import { ProductService } from "../../services/product-service.ts";
+import type { AppContext } from "../../types.js";
+import { ProductService } from "../../services/product-service.js";
 
 export const getProductDetailsTool = {
   name: "get_product_details",

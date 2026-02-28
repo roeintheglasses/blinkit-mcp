@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { RateLimiter } from "../../src/core/rate-limiter.ts";
+import { RateLimiter } from "../../src/core/rate-limiter.js";
 
 describe("RateLimiter", () => {
   test("allows burst up to capacity", async () => {

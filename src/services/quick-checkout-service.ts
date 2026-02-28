@@ -1,14 +1,14 @@
-import type { AppContext } from "../types.ts";
-import { getCart as getCartFlow } from "../playwright/cart-flow.ts";
+import type { AppContext } from "../types.js";
+import { getCart as getCartFlow } from "../playwright/cart-flow.js";
 import {
   checkout as checkoutFlow,
   getPaymentMethods as getPaymentMethodsFlow,
   selectPaymentMethod as selectPaymentMethodFlow,
-} from "../playwright/checkout-flow.ts";
+} from "../playwright/checkout-flow.js";
 import {
   getAddresses as getAddressesFlow,
   selectAddress as selectAddressFlow,
-} from "../playwright/location-flow.ts";
+} from "../playwright/location-flow.js";
 
 export class QuickCheckoutService {
   private ctx: AppContext;

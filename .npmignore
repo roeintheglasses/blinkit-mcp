@@ -7,4 +7,11 @@ scripts/
 *.md
 !README.md
 tsconfig.json
+tsconfig.build.json
+vitest.config.*
+.env*
 pnpm-lock.yaml
+manifest.json
+smithery.yaml
+*.mcpb
+REQUIREMENTS.md

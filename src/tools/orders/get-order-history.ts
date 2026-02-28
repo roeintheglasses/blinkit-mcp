@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { AppContext } from "../../types.ts";
-import { OrderService } from "../../services/order-service.ts";
+import type { AppContext } from "../../types.js";
+import { OrderService } from "../../services/order-service.js";
 
 export const getOrderHistoryTool = {
   name: "get_order_history",

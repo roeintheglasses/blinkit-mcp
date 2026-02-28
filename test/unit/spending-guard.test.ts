@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { SpendingGuard } from "../../src/services/spending-guard.ts";
+import { SpendingGuard } from "../../src/services/spending-guard.js";
 
 describe("SpendingGuard", () => {
   const guard = new SpendingGuard({

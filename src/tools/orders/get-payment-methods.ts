@@ -1,5 +1,5 @@
-import type { AppContext } from "../../types.ts";
-import { PaymentService } from "../../services/payment-service.ts";
+import type { AppContext } from "../../types.js";
+import { PaymentService } from "../../services/payment-service.js";
 
 export const getPaymentMethodsTool = {
   name: "get_payment_methods",

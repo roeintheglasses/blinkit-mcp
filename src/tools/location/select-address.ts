@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { AppContext } from "../../types.ts";
-import { LocationService } from "../../services/location-service.ts";
+import type { AppContext } from "../../types.js";
+import { LocationService } from "../../services/location-service.js";
 
 export const selectAddressTool = {
   name: "select_address",

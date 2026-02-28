@@ -1,7 +1,7 @@
 import { existsSync } from "fs";
-import type { AppContext } from "../types.ts";
-import { checkLoggedIn } from "../playwright/helpers.ts";
-import { loginFlow, enterOtpFlow } from "../playwright/auth-flow.ts";
+import type { AppContext } from "../types.js";
+import { checkLoggedIn } from "../playwright/helpers.js";
+import { loginFlow, enterOtpFlow } from "../playwright/auth-flow.js";
 
 export class AuthService {
   private ctx: AppContext;

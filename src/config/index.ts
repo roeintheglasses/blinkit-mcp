@@ -1,8 +1,8 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
-import { ConfigSchema, type BlinkitConfig } from "./schema.ts";
-import { CONFIG_DIR, CONFIG_FILE } from "../constants.ts";
+import { ConfigSchema, type BlinkitConfig } from "./schema.js";
+import { CONFIG_DIR, CONFIG_FILE } from "../constants.js";
 
 function getConfigPath(): string {
   return join(homedir(), CONFIG_DIR, CONFIG_FILE);

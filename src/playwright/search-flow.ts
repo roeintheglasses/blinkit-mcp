@@ -1,7 +1,7 @@
 import type { Page } from "playwright";
-import { debugStep, extractPrice } from "./helpers.ts";
-import { SELECTORS } from "./selectors.ts";
-import type { Product } from "../types.ts";
+import { debugStep, extractPrice } from "./helpers.js";
+import { SELECTORS } from "./selectors.js";
+import type { Product } from "../types.js";
 
 function log(msg: string): void {
   process.stderr.write(`[playwright] ${msg}\n`);

@@ -1,6 +1,6 @@
 import { describe, test, expect } from "vitest";
-import { SessionManager } from "../../src/core/session-manager.ts";
-import { Logger } from "../../src/core/logger.ts";
+import { SessionManager } from "../../src/core/session-manager.js";
+import { Logger } from "../../src/core/logger.js";
 
 // Note: SessionManager uses ~/.blinkit-mcp/auth.json which we can't easily redirect.
 // These tests focus on in-memory behavior.

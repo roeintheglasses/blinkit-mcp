@@ -1,5 +1,5 @@
 import type { Page } from "playwright";
-import { SELECTORS } from "./selectors.ts";
+import { SELECTORS } from "./selectors.js";
 
 /** Module-level debug mode flag — set this to enable debug helpers */
 export let debugMode = false;

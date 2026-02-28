@@ -1,11 +1,11 @@
-import type { AppContext, Cart } from "../types.ts";
+import type { AppContext, Cart } from "../types.js";
 import {
   getCart as getCartFlow,
   addToCart as addToCartFlow,
   updateCartItem as updateCartItemFlow,
   removeFromCart as removeFromCartFlow,
   clearCart as clearCartFlow,
-} from "../playwright/cart-flow.ts";
+} from "../playwright/cart-flow.js";
 
 export class CartService {
   private ctx: AppContext;

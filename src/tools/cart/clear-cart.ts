@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { AppContext } from "../../types.ts";
-import { CartService } from "../../services/cart-service.ts";
+import type { AppContext } from "../../types.js";
+import { CartService } from "../../services/cart-service.js";
 
 export const clearCartTool = {
   name: "clear_cart",

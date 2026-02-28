@@ -1,4 +1,4 @@
-import { RATE_LIMIT } from "../constants.ts";
+import { RATE_LIMIT } from "../constants.js";
 
 export class RateLimiter {
   private tokens: number;

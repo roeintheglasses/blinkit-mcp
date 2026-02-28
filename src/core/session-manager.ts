@@ -1,9 +1,9 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, chmodSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
-import { CONFIG_DIR, AUTH_FILE } from "../constants.ts";
-import type { SessionData } from "../types.ts";
-import type { Logger } from "./logger.ts";
+import { CONFIG_DIR, AUTH_FILE } from "../constants.js";
+import type { SessionData } from "../types.js";
+import type { Logger } from "./logger.js";
 
 function getAuthPath(): string {
   return join(homedir(), CONFIG_DIR, AUTH_FILE);

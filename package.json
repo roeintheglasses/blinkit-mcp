@@ -6,10 +6,16 @@
   "bin": {
     "blinkit-mcp": "./dist/index.js"
   },
-  "main": "src/index.ts",
+  "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "tsx src/index.ts",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "pnpm run build",
+    "postinstall": "npx playwright install chromium || true",
+    "build:mcpb": "bash scripts/build-mcpb.sh",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
@@ -19,9 +25,14 @@
     "blinkit",
     "grocery",
     "ai",
-    "claude"
+    "claude",
+    "model-context-protocol"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/roeintheglasses/blinkit-mcp"
+  },
   "devDependencies": {
     "@types/node": "^25.3.0",
     "@types/pngjs": "^6.0.5",

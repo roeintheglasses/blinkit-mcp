@@ -1,0 +1,29 @@
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    required: []
+    properties:
+      defaultLat:
+        type: string
+        description: Default delivery latitude (e.g., 28.6139 for Delhi)
+      defaultLon:
+        type: string
+        description: Default delivery longitude (e.g., 77.2090 for Delhi)
+      warnThreshold:
+        type: string
+        description: Cart value warning threshold in INR (default 500)
+      maxOrderAmount:
+        type: string
+        description: Hard limit on order amount in INR (default 2000)
+  commandFunction: |-
+    (config) => ({
+      command: 'npx',
+      args: ['-y', 'blinkit-mcp'],
+      env: {
+        BLINKIT_DEFAULT_LAT: config.defaultLat || '',
+        BLINKIT_DEFAULT_LON: config.defaultLon || '',
+        BLINKIT_WARN_THRESHOLD: config.warnThreshold || '',
+        BLINKIT_MAX_ORDER_AMOUNT: config.maxOrderAmount || ''
+      }
+    })

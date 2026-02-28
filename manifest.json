@@ -1,0 +1,125 @@
+{
+  "manifest_version": "0.3",
+  "name": "blinkit-mcp",
+  "version": "1.0.0",
+  "display_name": "Blinkit Grocery",
+  "description": "Order groceries from Blinkit using your favorite AI Agents — search products, manage cart, and checkout with UPI",
+  "author": {
+    "name": "Hrishi Jangir"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/roeintheglasses/blinkit-mcp"
+  },
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.js"],
+      "env": {
+        "BLINKIT_DEFAULT_LAT": "${user_config.default_lat}",
+        "BLINKIT_DEFAULT_LON": "${user_config.default_lon}",
+        "BLINKIT_WARN_THRESHOLD": "${user_config.warn_threshold}",
+        "BLINKIT_MAX_ORDER_AMOUNT": "${user_config.max_order_amount}"
+      }
+    }
+  },
+  "user_config": {
+    "default_lat": {
+      "type": "string",
+      "title": "Delivery Latitude",
+      "description": "Default delivery latitude (e.g., 28.6139 for Delhi)",
+      "required": false
+    },
+    "default_lon": {
+      "type": "string",
+      "title": "Delivery Longitude",
+      "description": "Default delivery longitude (e.g., 77.2090 for Delhi)",
+      "required": false
+    },
+    "warn_threshold": {
+      "type": "string",
+      "title": "Spending Warning Threshold",
+      "description": "Warn when cart total exceeds this amount in INR (default: 500)",
+      "required": false
+    },
+    "max_order_amount": {
+      "type": "string",
+      "title": "Maximum Order Amount",
+      "description": "Block checkout above this amount in INR (default: 2000)",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  },
+  "tools": [
+    {
+      "name": "check_login_status",
+      "description": "Check if you are logged into Blinkit"
+    },
+    { "name": "login", "description": "Start login flow with phone number" },
+    {
+      "name": "enter_otp",
+      "description": "Complete login by entering the OTP"
+    },
+    { "name": "logout", "description": "Log out and clear session" },
+    {
+      "name": "set_location",
+      "description": "Set delivery location by coordinates or address search"
+    },
+    {
+      "name": "get_saved_addresses",
+      "description": "List saved delivery addresses"
+    },
+    {
+      "name": "select_address",
+      "description": "Select a delivery address by index"
+    },
+    {
+      "name": "search_products",
+      "description": "Search for products on Blinkit"
+    },
+    {
+      "name": "get_product_details",
+      "description": "Get detailed info about a product"
+    },
+    { "name": "browse_categories", "description": "List product categories" },
+    {
+      "name": "browse_category",
+      "description": "Browse products in a category"
+    },
+    {
+      "name": "get_cart",
+      "description": "View cart contents with items, quantities, and totals"
+    },
+    { "name": "add_to_cart", "description": "Add a product to cart" },
+    {
+      "name": "update_cart_item",
+      "description": "Update quantity of an item in cart"
+    },
+    { "name": "remove_from_cart", "description": "Remove an item from cart" },
+    { "name": "clear_cart", "description": "Remove all items from cart" },
+    { "name": "checkout", "description": "Initiate checkout flow" },
+    {
+      "name": "get_payment_methods",
+      "description": "List available payment methods"
+    },
+    {
+      "name": "select_payment_method",
+      "description": "Select a payment method (UPI, card, etc.)"
+    },
+    { "name": "pay_now", "description": "Click pay now to complete payment" },
+    {
+      "name": "quick_upi_checkout",
+      "description": "One-step checkout: cart → address → UPI QR code"
+    },
+    { "name": "get_order_history", "description": "View past orders" },
+    { "name": "track_order", "description": "Track an order's delivery status" }
+  ]
+}

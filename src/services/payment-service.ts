@@ -1,9 +1,9 @@
-import type { AppContext } from "../types.ts";
+import type { AppContext } from "../types.js";
 import {
   getPaymentMethods as getPaymentMethodsFlow,
   selectPaymentMethod as selectPaymentMethodFlow,
   payNow as payNowFlow,
-} from "../playwright/checkout-flow.ts";
+} from "../playwright/checkout-flow.js";
 
 export class PaymentService {
   private ctx: AppContext;

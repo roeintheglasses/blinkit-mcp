@@ -1,14 +1,15 @@
+#!/usr/bin/env node
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { loadConfig } from "./config/index.ts";
-import { Logger } from "./core/logger.ts";
-import { SessionManager } from "./core/session-manager.ts";
-import { RateLimiter } from "./core/rate-limiter.ts";
-import { BrowserManager } from "./core/browser-manager.ts";
-import { BlinkitHttpClient } from "./core/http-client.ts";
-import { SpendingGuard } from "./services/spending-guard.ts";
-import { createServer } from "./server.ts";
-import { getLocationFromIP } from "./utils/geo.ts";
-import type { AppContext } from "./types.ts";
+import { loadConfig } from "./config/index.js";
+import { Logger } from "./core/logger.js";
+import { SessionManager } from "./core/session-manager.js";
+import { RateLimiter } from "./core/rate-limiter.js";
+import { BrowserManager } from "./core/browser-manager.js";
+import { BlinkitHttpClient } from "./core/http-client.js";
+import { SpendingGuard } from "./services/spending-guard.js";
+import { createServer } from "./server.js";
+import { getLocationFromIP } from "./utils/geo.js";
+import type { AppContext } from "./types.js";
 
 async function main() {
   const logger = new Logger("info");

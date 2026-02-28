@@ -1,7 +1,7 @@
 import type { Page } from "playwright";
-import { isStoreClosed, extractPrice } from "./helpers.ts";
-import { getKnownProducts, reSearchProduct } from "./search-flow.ts";
-import { SELECTORS, productById } from "./selectors.ts";
+import { isStoreClosed, extractPrice } from "./helpers.js";
+import { getKnownProducts, reSearchProduct } from "./search-flow.js";
+import { SELECTORS, productById } from "./selectors.js";
 
 function log(msg: string): void {
   process.stderr.write(`[playwright] ${msg}\n`);

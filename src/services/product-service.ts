@@ -1,11 +1,11 @@
-import type { AppContext, Product, ProductDetails } from "../types.ts";
-import { ENDPOINTS } from "../constants.ts";
+import type { AppContext, Product, ProductDetails } from "../types.js";
+import { ENDPOINTS } from "../constants.js";
 import {
   searchProducts as searchProductsFlow,
   getProductDetails as getProductDetailsFlow,
   browseCategories as browseCategoriesFlow,
   browseCategoryProducts as browseCategoryProductsFlow,
-} from "../playwright/search-flow.ts";
+} from "../playwright/search-flow.js";
 
 export class ProductService {
   private ctx: AppContext;

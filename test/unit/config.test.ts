@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from "vitest";
-import { ConfigSchema } from "../../src/config/schema.ts";
+import { ConfigSchema } from "../../src/config/schema.js";
 
 describe("ConfigSchema", () => {
   test("parses with all defaults", () => {

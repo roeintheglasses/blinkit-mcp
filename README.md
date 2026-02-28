@@ -25,7 +25,7 @@ Blinkit has no public API. This server uses a hybrid approach: direct HTTP calls
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/AmanVarshney01/blinkit-mcp.git
+   git clone https://github.com/roeintheglasses/blinkit-mcp.git
    cd blinkit-mcp
    ```
 
@@ -52,7 +52,7 @@ Blinkit has no public API. This server uses a hybrid approach: direct HTTP calls
    ```json
    {
      "default_lat": 28.6139,
-     "default_lon": 77.2090,
+     "default_lon": 77.209,
      "warn_threshold": 500,
      "max_order_amount": 2000,
      "headless": true
@@ -102,76 +102,76 @@ Configuration is loaded from `~/.blinkit-mcp/config.json`. Environment variables
 
 ### Config Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `default_lat` | `number` | -- | Default delivery latitude (-90 to 90). Falls back to IP geolocation if unset. |
-| `default_lon` | `number` | -- | Default delivery longitude (-180 to 180). Falls back to IP geolocation if unset. |
-| `warn_threshold` | `number` | `500` | Cart value (INR) at which a spending warning is returned. |
-| `max_order_amount` | `number` | `2000` | Hard limit (INR). Checkout is blocked if the cart exceeds this amount. |
-| `headless` | `boolean` | `true` | Run the Playwright browser in headless mode. Set to `false` to see the browser window. |
-| `debug` | `boolean` | `false` | Enable debug logging. Also forces headed mode and applies `slow_mo`. |
-| `slow_mo` | `number` | `0` | Milliseconds to slow down each Playwright action. Useful for debugging. Defaults to 500 when `debug` is `true`. |
+| Option             | Type      | Default | Description                                                                                                     |
+| ------------------ | --------- | ------- | --------------------------------------------------------------------------------------------------------------- |
+| `default_lat`      | `number`  | --      | Default delivery latitude (-90 to 90). Falls back to IP geolocation if unset.                                   |
+| `default_lon`      | `number`  | --      | Default delivery longitude (-180 to 180). Falls back to IP geolocation if unset.                                |
+| `warn_threshold`   | `number`  | `500`   | Cart value (INR) at which a spending warning is returned.                                                       |
+| `max_order_amount` | `number`  | `2000`  | Hard limit (INR). Checkout is blocked if the cart exceeds this amount.                                          |
+| `headless`         | `boolean` | `true`  | Run the Playwright browser in headless mode. Set to `false` to see the browser window.                          |
+| `debug`            | `boolean` | `false` | Enable debug logging. Also forces headed mode and applies `slow_mo`.                                            |
+| `slow_mo`          | `number`  | `0`     | Milliseconds to slow down each Playwright action. Useful for debugging. Defaults to 500 when `debug` is `true`. |
 
 ### Environment Variables
 
-| Variable | Overrides |
-|----------|-----------|
-| `BLINKIT_DEFAULT_LAT` | `default_lat` |
-| `BLINKIT_DEFAULT_LON` | `default_lon` |
-| `BLINKIT_WARN_THRESHOLD` | `warn_threshold` |
-| `BLINKIT_MAX_ORDER_AMOUNT` | `max_order_amount` |
-| `BLINKIT_HEADLESS` | `headless` (set to `"false"` to disable) |
-| `BLINKIT_DEBUG` | `debug` (set to `"true"` to enable) |
-| `BLINKIT_SLOW_MO` | `slow_mo` |
+| Variable                   | Overrides                                |
+| -------------------------- | ---------------------------------------- |
+| `BLINKIT_DEFAULT_LAT`      | `default_lat`                            |
+| `BLINKIT_DEFAULT_LON`      | `default_lon`                            |
+| `BLINKIT_WARN_THRESHOLD`   | `warn_threshold`                         |
+| `BLINKIT_MAX_ORDER_AMOUNT` | `max_order_amount`                       |
+| `BLINKIT_HEADLESS`         | `headless` (set to `"false"` to disable) |
+| `BLINKIT_DEBUG`            | `debug` (set to `"true"` to enable)      |
+| `BLINKIT_SLOW_MO`          | `slow_mo`                                |
 
 ## Available Tools
 
 ### Auth (4 tools)
 
-| Tool | Description |
-|------|-------------|
+| Tool                 | Description                                                |
+| -------------------- | ---------------------------------------------------------- |
 | `check_login_status` | Check if the current session is authenticated with Blinkit |
-| `login` | Initiate OTP login with a phone number. Sends an SMS OTP. |
-| `enter_otp` | Submit the 4-digit OTP received via SMS to complete login |
-| `logout` | Log out and clear saved session and auth tokens |
+| `login`              | Initiate OTP login with a phone number. Sends an SMS OTP.  |
+| `enter_otp`          | Submit the 4-digit OTP received via SMS to complete login  |
+| `logout`             | Log out and clear saved session and auth tokens            |
 
 ### Location (3 tools)
 
-| Tool | Description |
-|------|-------------|
-| `set_location` | Set delivery location by searching for an address or area name |
-| `get_saved_addresses` | List the user's saved delivery addresses (requires login) |
-| `select_address` | Select a saved address by index for delivery during checkout |
+| Tool                  | Description                                                    |
+| --------------------- | -------------------------------------------------------------- |
+| `set_location`        | Set delivery location by searching for an address or area name |
+| `get_saved_addresses` | List the user's saved delivery addresses (requires login)      |
+| `select_address`      | Select a saved address by index for delivery during checkout   |
 
 ### Browse and Search (4 tools)
 
-| Tool | Description |
-|------|-------------|
-| `search_products` | Search for products by keyword. Returns names, prices, and IDs. |
+| Tool                  | Description                                                                         |
+| --------------------- | ----------------------------------------------------------------------------------- |
+| `search_products`     | Search for products by keyword. Returns names, prices, and IDs.                     |
 | `get_product_details` | Get full details for a product by ID (price, description, brand, nutrition, images) |
-| `browse_categories` | List top-level product categories with IDs |
-| `browse_category` | Get products within a specific category or subcategory |
+| `browse_categories`   | List top-level product categories with IDs                                          |
+| `browse_category`     | Get products within a specific category or subcategory                              |
 
 ### Cart (5 tools)
 
-| Tool | Description |
-|------|-------------|
-| `get_cart` | View current cart contents, item quantities, and total (requires login) |
-| `add_to_cart` | Add a product to cart by product ID with optional quantity (requires login) |
-| `update_cart_item` | Change quantity of a cart item. Set to 0 to remove. (requires login) |
-| `remove_from_cart` | Remove a specific quantity of a product from cart (requires login) |
-| `clear_cart` | Empty the entire cart (requires login) |
+| Tool               | Description                                                                 |
+| ------------------ | --------------------------------------------------------------------------- |
+| `get_cart`         | View current cart contents, item quantities, and total (requires login)     |
+| `add_to_cart`      | Add a product to cart by product ID with optional quantity (requires login) |
+| `update_cart_item` | Change quantity of a cart item. Set to 0 to remove. (requires login)        |
+| `remove_from_cart` | Remove a specific quantity of a product from cart (requires login)          |
+| `clear_cart`       | Empty the entire cart (requires login)                                      |
 
 ### Orders and Payment (6 tools)
 
-| Tool | Description |
-|------|-------------|
-| `checkout` | Proceed to checkout from cart. Returns next step hint (`select_address` or `payment`). |
-| `get_order_history` | View past orders with IDs, dates, totals, and status (requires login) |
-| `track_order` | Get real-time tracking status of an order. Defaults to most recent order. (requires login) |
-| `get_upi_ids` | Get available UPI IDs from the payment page after checkout |
-| `select_upi_id` | Select or enter a UPI VPA for payment (e.g., `user@ybl`) |
-| `pay_now` | Complete the transaction by confirming payment |
+| Tool                | Description                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------ |
+| `checkout`          | Proceed to checkout from cart. Returns next step hint (`select_address` or `payment`).     |
+| `get_order_history` | View past orders with IDs, dates, totals, and status (requires login)                      |
+| `track_order`       | Get real-time tracking status of an order. Defaults to most recent order. (requires login) |
+| `get_upi_ids`       | Get available UPI IDs from the payment page after checkout                                 |
+| `select_upi_id`     | Select or enter a UPI VPA for payment (e.g., `user@ybl`)                                   |
+| `pay_now`           | Complete the transaction by confirming payment                                             |
 
 **Total: 22 tools**
 
@@ -238,7 +238,7 @@ User: Order some groceries from Blinkit
 User: The OTP is 1234
 
   3. [enter_otp] otp: "1234" --> Logged in successfully
-  4. [set_location] location_name: "Koramangala, Bangalore" --> Location set
+  4. [set_location] location_name: "Delhi" --> Location set
 
 User: Find me some milk
 

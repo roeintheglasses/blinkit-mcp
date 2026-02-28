@@ -1,38 +1,38 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { AppContext } from "./types.ts";
+import type { AppContext } from "./types.js";
 
 // Auth tools
-import { checkLoginStatusTool } from "./tools/auth/check-login-status.ts";
-import { loginTool } from "./tools/auth/login.ts";
-import { enterOtpTool } from "./tools/auth/enter-otp.ts";
-import { logoutTool } from "./tools/auth/logout.ts";
+import { checkLoginStatusTool } from "./tools/auth/check-login-status.js";
+import { loginTool } from "./tools/auth/login.js";
+import { enterOtpTool } from "./tools/auth/enter-otp.js";
+import { logoutTool } from "./tools/auth/logout.js";
 
 // Location tools
-import { setLocationTool } from "./tools/location/set-location.ts";
-import { getSavedAddressesTool } from "./tools/location/get-saved-addresses.ts";
-import { selectAddressTool } from "./tools/location/select-address.ts";
+import { setLocationTool } from "./tools/location/set-location.js";
+import { getSavedAddressesTool } from "./tools/location/get-saved-addresses.js";
+import { selectAddressTool } from "./tools/location/select-address.js";
 
 // Browse tools
-import { searchProductsTool } from "./tools/browse/search-products.ts";
-import { getProductDetailsTool } from "./tools/browse/get-product-details.ts";
-import { browseCategoriesToolDef } from "./tools/browse/browse-categories.ts";
-import { browseCategoryTool } from "./tools/browse/browse-category.ts";
+import { searchProductsTool } from "./tools/browse/search-products.js";
+import { getProductDetailsTool } from "./tools/browse/get-product-details.js";
+import { browseCategoriesToolDef } from "./tools/browse/browse-categories.js";
+import { browseCategoryTool } from "./tools/browse/browse-category.js";
 
 // Cart tools
-import { getCartTool } from "./tools/cart/get-cart.ts";
-import { addToCartTool } from "./tools/cart/add-to-cart.ts";
-import { updateCartItemTool } from "./tools/cart/update-cart-item.ts";
-import { removeFromCartTool } from "./tools/cart/remove-from-cart.ts";
-import { clearCartTool } from "./tools/cart/clear-cart.ts";
+import { getCartTool } from "./tools/cart/get-cart.js";
+import { addToCartTool } from "./tools/cart/add-to-cart.js";
+import { updateCartItemTool } from "./tools/cart/update-cart-item.js";
+import { removeFromCartTool } from "./tools/cart/remove-from-cart.js";
+import { clearCartTool } from "./tools/cart/clear-cart.js";
 
 // Order tools
-import { checkoutTool } from "./tools/orders/checkout.ts";
-import { getOrderHistoryTool } from "./tools/orders/get-order-history.ts";
-import { trackOrderTool } from "./tools/orders/track-order.ts";
-import { getPaymentMethodsTool } from "./tools/orders/get-payment-methods.ts";
-import { selectPaymentMethodTool } from "./tools/orders/select-payment-method.ts";
-import { payNowTool } from "./tools/orders/pay-now.ts";
-import { quickUpiCheckoutTool } from "./tools/orders/quick-upi-checkout.ts";
+import { checkoutTool } from "./tools/orders/checkout.js";
+import { getOrderHistoryTool } from "./tools/orders/get-order-history.js";
+import { trackOrderTool } from "./tools/orders/track-order.js";
+import { getPaymentMethodsTool } from "./tools/orders/get-payment-methods.js";
+import { selectPaymentMethodTool } from "./tools/orders/select-payment-method.js";
+import { payNowTool } from "./tools/orders/pay-now.js";
+import { quickUpiCheckoutTool } from "./tools/orders/quick-upi-checkout.js";
 
 type ContentBlock =
   | { type: "text"; text: string }

@@ -1,6 +1,6 @@
 import type { Page } from "playwright";
-import { isStoreClosed, navigateToPaymentWidget } from "./helpers.ts";
-import { SELECTORS } from "./selectors.ts";
+import { isStoreClosed, navigateToPaymentWidget } from "./helpers.js";
+import { SELECTORS } from "./selectors.js";
 import QRCode from "qrcode";
 
 function log(msg: string): void {

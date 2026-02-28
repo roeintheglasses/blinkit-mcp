@@ -1,9 +1,9 @@
-import type { AppContext, Address } from "../types.ts";
+import type { AppContext, Address } from "../types.js";
 import {
   setLocation as setLocationFlow,
   getAddresses as getAddressesFlow,
   selectAddress as selectAddressFlow,
-} from "../playwright/location-flow.ts";
+} from "../playwright/location-flow.js";
 
 export class LocationService {
   private ctx: AppContext;

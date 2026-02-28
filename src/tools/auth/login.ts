@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { AppContext } from "../../types.ts";
-import { AuthService } from "../../services/auth-service.ts";
+import type { AppContext } from "../../types.js";
+import { AuthService } from "../../services/auth-service.js";
 
 export const loginTool = {
   name: "login",

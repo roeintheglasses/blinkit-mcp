@@ -1,5 +1,5 @@
-import type { BlinkitConfig } from "../config/schema.ts";
-import type { SpendingCheckResult } from "../types.ts";
+import type { BlinkitConfig } from "../config/schema.js";
+import type { SpendingCheckResult } from "../types.js";
 
 export class SpendingGuard {
   private warnThreshold: number;

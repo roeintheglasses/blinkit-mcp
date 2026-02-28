@@ -4,7 +4,9 @@ node_modules
 # output
 out
 dist
+bundle
 *.tgz
+*.mcpb
 
 # code coverage
 coverage

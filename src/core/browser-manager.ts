@@ -2,11 +2,11 @@ import { firefox, type Browser, type BrowserContext, type Page } from "playwrigh
 import { existsSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { homedir } from "os";
-import type { Logger } from "./logger.ts";
-import type { BlinkitConfig } from "../config/schema.ts";
-import type { SessionManager } from "./session-manager.ts";
-import { CONFIG_DIR, COOKIES_DIR, STORAGE_STATE_FILE } from "../constants.ts";
-import { SELECTORS } from "../playwright/selectors.ts";
+import type { Logger } from "./logger.js";
+import type { BlinkitConfig } from "../config/schema.js";
+import type { SessionManager } from "./session-manager.js";
+import { CONFIG_DIR, COOKIES_DIR, STORAGE_STATE_FILE } from "../constants.js";
+import { SELECTORS } from "../playwright/selectors.js";
 
 export class BrowserManager {
   private browser: Browser | null = null;

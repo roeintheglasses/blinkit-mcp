@@ -1,6 +1,6 @@
 import type { Page } from "playwright";
-import { debugStep, isStoreClosed, navigateToPaymentWidget } from "./helpers.ts";
-import { SELECTORS } from "./selectors.ts";
+import { debugStep, isStoreClosed, navigateToPaymentWidget } from "./helpers.js";
+import { SELECTORS } from "./selectors.js";
 
 function log(msg: string): void {
   process.stderr.write(`[playwright] ${msg}\n`);

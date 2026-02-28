@@ -1,6 +1,6 @@
-import type { RateLimiter } from "./rate-limiter.ts";
-import type { Logger } from "./logger.ts";
-import { TIMEOUTS, DEFAULT_HEADERS } from "../constants.ts";
+import type { RateLimiter } from "./rate-limiter.js";
+import type { Logger } from "./logger.js";
+import { TIMEOUTS, DEFAULT_HEADERS } from "../constants.js";
 
 export class BlinkitHttpClient {
   private rateLimiter: RateLimiter;

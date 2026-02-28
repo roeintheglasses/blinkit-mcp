@@ -1,6 +1,6 @@
 import type { Page, BrowserContext } from "playwright";
-import { debugStep, checkLoggedIn } from "./helpers.ts";
-import { SELECTORS } from "./selectors.ts";
+import { debugStep, checkLoggedIn } from "./helpers.js";
+import { SELECTORS } from "./selectors.js";
 
 function log(msg: string): void {
   process.stderr.write(`[playwright] ${msg}\n`);

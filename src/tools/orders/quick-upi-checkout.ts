@@ -1,5 +1,5 @@
-import type { AppContext } from "../../types.ts";
-import { QuickCheckoutService } from "../../services/quick-checkout-service.ts";
+import type { AppContext } from "../../types.js";
+import { QuickCheckoutService } from "../../services/quick-checkout-service.js";
 
 export const quickUpiCheckoutTool = {
   name: "quick_upi_checkout",
