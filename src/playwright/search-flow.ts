@@ -87,12 +87,13 @@ async function batchParseCards(page: Page, lim: number): Promise<Array<Record<st
 
       let price = 0;
       let priceDisplay = "Unknown Price";
-      for (const line of text.split("\n")) {
-        if (line.includes("\u20B9")) {
-          priceDisplay = line.trim();
-          price = parseFloat(line.replace(/[^0-9.]/g, "")) || 0;
-          break;
-        }
+      // Find the first ₹ symbol and extract the price right after it
+      const priceMatch = text.match(/₹\s*([\d,]+(?:\.\d+)?)/);
+      if (priceMatch) {
+        price = parseFloat(priceMatch[1].replace(/,/g, "")) || 0;
+        // Capture surrounding context for display
+        const matchIdx = text.indexOf(priceMatch[0]);
+        priceDisplay = text.substring(Math.max(0, matchIdx - 5), matchIdx + priceMatch[0].length + 5).trim();
       }
 
       const weightEl = card.querySelector("div[class*='plp-product__quantity'], div[class*='Weight']");

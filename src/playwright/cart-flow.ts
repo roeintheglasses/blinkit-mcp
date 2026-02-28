@@ -144,13 +144,27 @@ export async function getCart(page: Page): Promise<{
 }> {
   const emptyResult = { items: [] as any[], subtotal: 0, delivery_fee: 0, handling_fee: 0, total: 0, item_count: 0 };
 
-  // Click the cart button to open the cart drawer
-  const cartBtn = page.locator(SELECTORS.CART_BUTTON);
-  if (await cartBtn.count() > 0) {
-    await cartBtn.first().click();
-    await page.waitForTimeout(2000);
+  // Check if cart drawer is already open (e.g. after add-to-cart)
+  const cartAlreadyOpen =
+    await page.isVisible(SELECTORS.BILL_DETAILS_REGEX).catch(() => false) ||
+    await page.locator(SELECTORS.CART_PRODUCT).count().then(c => c > 0).catch(() => false);
+
+  if (!cartAlreadyOpen) {
+    // Click the cart button to open the cart drawer
+    const cartBtn = page.locator(SELECTORS.CART_BUTTON);
+    if (await cartBtn.count() > 0) {
+      try {
+        await cartBtn.first().click({ force: true, timeout: 10000 });
+      } catch {
+        log("Cart button click failed, trying JavaScript click...");
+        await cartBtn.first().evaluate((el: any) => el.click()).catch(() => {});
+      }
+      await page.waitForTimeout(2000);
+    } else {
+      return { ...emptyResult, warning: "Cart button not found." };
+    }
   } else {
-    return { ...emptyResult, warning: "Cart button not found." };
+    log("Cart drawer is already open.");
   }
 
   // 1. Critical availability check

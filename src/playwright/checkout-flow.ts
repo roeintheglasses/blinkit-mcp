@@ -28,7 +28,11 @@ export async function checkout(page: Page): Promise<{
     log("Proceed button not visible. Attempting to open Cart drawer...");
     const cartBtn = page.locator(SELECTORS.CART_BUTTON_FULL);
     if (await cartBtn.count() > 0) {
-      await cartBtn.first().click();
+      try {
+        await cartBtn.first().click({ force: true, timeout: 10000 });
+      } catch {
+        await cartBtn.first().evaluate((el: any) => el.click()).catch(() => {});
+      }
       log("Clicked cart button.");
       await page.waitForTimeout(2000);
     } else {
@@ -36,9 +40,14 @@ export async function checkout(page: Page): Promise<{
     }
   }
 
-  // Try clicking Proceed
+  // Try clicking Proceed — use force:true since it's often in a sticky footer
   if (await proceedBtn.isVisible().catch(() => false)) {
-    await proceedBtn.click();
+    try {
+      await proceedBtn.click({ force: true, timeout: 10000 });
+    } catch {
+      log("Proceed button force-click failed, trying JS click...");
+      await proceedBtn.evaluate((el: any) => el.click()).catch(() => {});
+    }
     log("Cart checkout initiated.");
     await page.waitForTimeout(3000);
 

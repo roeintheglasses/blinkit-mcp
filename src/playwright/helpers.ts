@@ -135,7 +135,11 @@ export async function navigateToPaymentWidget(page: Page, timeoutMs = 20000): Pr
     // Check for "Proceed to Pay" / "Proceed to Payment" button
     const proceedToPay = page.locator(SELECTORS.PROCEED_TO_PAY);
     if (await proceedToPay.count() > 0 && await proceedToPay.last().isVisible().catch(() => false)) {
-      await proceedToPay.last().click();
+      try {
+        await proceedToPay.last().click({ force: true, timeout: 5000 });
+      } catch {
+        await proceedToPay.last().evaluate((el: any) => el.click()).catch(() => {});
+      }
       skippedSteps.push("proceed_to_pay_clicked");
       log("Clicked 'Proceed to Pay'");
       await page.waitForTimeout(2000);
@@ -145,7 +149,11 @@ export async function navigateToPaymentWidget(page: Page, timeoutMs = 20000): Pr
     // Check for generic "Proceed" or "Continue" button (fallback)
     const genericProceed = page.locator("button, div").filter({ hasText: /^Proceed$|^Continue$|^Next$/ }).last();
     if (await genericProceed.isVisible().catch(() => false)) {
-      await genericProceed.click();
+      try {
+        await genericProceed.click({ force: true, timeout: 5000 });
+      } catch {
+        await genericProceed.evaluate((el: any) => el.click()).catch(() => {});
+      }
       skippedSteps.push("generic_proceed_clicked");
       log("Clicked generic Proceed/Continue button");
       await page.waitForTimeout(1500);
@@ -170,7 +178,13 @@ export async function navigateToPaymentWidget(page: Page, timeoutMs = 20000): Pr
 /** Extract numeric price from a text string like "₹199" or "199.50" */
 export function extractPrice(text: string | null): number {
   if (!text) return 0;
-  return parseFloat(text.replace(/[^0-9.]/g, "")) || 0;
+  // Look for ₹ symbol and grab the number right after it
+  const rupeeMatch = text.match(/₹\s*([\d,]+(?:\.\d+)?)/);
+  if (rupeeMatch) return parseFloat(rupeeMatch[1].replace(/,/g, "")) || 0;
+  // Fallback: grab the last standalone number in the text
+  const numbers = text.match(/\b(\d+(?:\.\d+)?)\b/g);
+  if (numbers && numbers.length > 0) return parseFloat(numbers[numbers.length - 1]) || 0;
+  return 0;
 }
 
 // ─── Generic utility helpers (preserved from original) ───────────────────────
