@@ -29,16 +29,20 @@ import { clearCartTool } from "./tools/cart/clear-cart.ts";
 import { checkoutTool } from "./tools/orders/checkout.ts";
 import { getOrderHistoryTool } from "./tools/orders/get-order-history.ts";
 import { trackOrderTool } from "./tools/orders/track-order.ts";
-import { getUpiIdsTool } from "./tools/orders/get-upi-ids.ts";
-import { selectUpiIdTool } from "./tools/orders/select-upi-id.ts";
+import { getPaymentMethodsTool } from "./tools/orders/get-payment-methods.ts";
+import { selectPaymentMethodTool } from "./tools/orders/select-payment-method.ts";
 import { payNowTool } from "./tools/orders/pay-now.ts";
+
+type ContentBlock =
+  | { type: "text"; text: string }
+  | { type: "image"; data: string; mimeType: string };
 
 type ToolDef = {
   name: string;
   description: string;
   inputSchema: Record<string, import("zod").ZodType>;
   handler: (input: any, ctx: AppContext) => Promise<{
-    content: { type: "text"; text: string }[];
+    content: ContentBlock[];
     isError?: boolean;
   }>;
 };
@@ -63,8 +67,8 @@ const ALL_TOOLS: ToolDef[] = [
   checkoutTool,
   getOrderHistoryTool,
   trackOrderTool,
-  getUpiIdsTool,
-  selectUpiIdTool,
+  getPaymentMethodsTool,
+  selectPaymentMethodTool,
   payNowTool,
 ];
 

@@ -1,7 +1,7 @@
 import type { AppContext } from "../types.ts";
 import {
-  getUpiIds as getUpiIdsFlow,
-  selectUpiId as selectUpiIdFlow,
+  getPaymentMethods as getPaymentMethodsFlow,
+  selectPaymentMethod as selectPaymentMethodFlow,
   payNow as payNowFlow,
 } from "../playwright/checkout-flow.ts";
 
@@ -12,15 +12,27 @@ export class PaymentService {
     this.ctx = ctx;
   }
 
-  async getUpiIds(): Promise<string[]> {
+  async getPaymentMethods(): Promise<{
+    methods: Array<{
+      name: string;
+      type: string;
+      available: boolean;
+      details?: string;
+    }>;
+    hint?: string;
+  }> {
     const page = await this.ctx.browserManager.ensurePage();
-    const result = await getUpiIdsFlow(page);
-    return result.upi_ids;
+    return getPaymentMethodsFlow(page);
   }
 
-  async selectUpiId(upiId: string): Promise<void> {
+  async selectPaymentMethod(methodType: string): Promise<{
+    selected: boolean;
+    message: string;
+    action_needed?: string;
+    qr_image_base64?: string;
+  }> {
     const page = await this.ctx.browserManager.ensurePage();
-    await selectUpiIdFlow(page, upiId);
+    return selectPaymentMethodFlow(page, methodType);
   }
 
   async payNow(): Promise<string> {

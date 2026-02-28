@@ -42,7 +42,9 @@ export async function debugStep(page: Page, label: string): Promise<void> {
 export async function checkLoggedIn(page: Page): Promise<boolean> {
   try {
     // Positive indicators -- these confirm the user IS logged in
+    // Blinkit shows "Account" (not "My Account") in the header when logged in
     if (await page.isVisible("text='My Account'").catch(() => false)) return true;
+    if (await page.isVisible("text='Account'").catch(() => false)) return true;
     if (await page.isVisible(".user-profile").catch(() => false)) return true;
     if (await page.locator("div[class*='ProfileButton'], div[class*='AccountButton'], div[class*='UserProfile']")
       .first().isVisible({ timeout: 1000 }).catch(() => false)) return true;

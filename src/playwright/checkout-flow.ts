@@ -24,13 +24,13 @@ export async function checkout(page: Page): Promise<{
   // If Proceed not visible, try opening the cart first
   if (!await proceedBtn.isVisible().catch(() => false)) {
     log("Proceed button not visible. Attempting to open Cart drawer...");
-    const cartBtn = page.locator("div[class*='CartButton__Button'], div[class*='CartButton__Container']");
+    const cartBtn = page.locator("div[class*='CartButton__Button'], div[class*='CartButton__Container'], div[class*='CartButton']");
     if (await cartBtn.count() > 0) {
       await cartBtn.first().click();
-      log("Clicked 'My Cart' button.");
+      log("Clicked cart button.");
       await page.waitForTimeout(2000);
     } else {
-      log("Could not find 'My Cart' button.");
+      log("Could not find cart button.");
     }
   }
 
@@ -49,7 +49,7 @@ export async function checkout(page: Page): Promise<{
     } else if (await page.locator("#payment_widget").count() > 0) {
       return {
         next_step: "payment",
-        message: "Checkout initiated. Payment page is ready. Use get_upi_ids.",
+        message: "Checkout initiated. Payment page is ready. Use get_payment_methods to see available options.",
       };
     } else {
       // Try navigating through intermediate screens
@@ -57,13 +57,13 @@ export async function checkout(page: Page): Promise<{
       if (navResult.reached) {
         return {
           next_step: "payment",
-          message: "Checkout initiated. Payment page is ready. Use get_upi_ids.",
+          message: "Checkout initiated. Payment page is ready. Use get_payment_methods to see available options.",
           skipped_steps: navResult.skippedSteps,
         };
       } else {
         return {
           next_step: "unknown",
-          message: "Checkout initiated. Check page state -- you may need get_saved_addresses or get_upi_ids.",
+          message: "Checkout initiated. Check page state -- you may need get_saved_addresses or get_payment_methods.",
         };
       }
     }
@@ -72,148 +72,267 @@ export async function checkout(page: Page): Promise<{
   }
 }
 
+// ─── Payment iframe helpers ──────────────────────────────────────────────────
+
 /**
- * Get available UPI IDs from the payment widget iframe.
+ * Get the payment iframe's content frame.
+ * Returns null if iframe not found or not accessible.
  */
-export async function getUpiIds(page: Page): Promise<{ upi_ids: string[]; hint?: string }> {
-  log("Getting available UPI IDs...");
+async function getPaymentFrame(page: Page, timeoutMs = 15000) {
+  const iframeElement = await page.waitForSelector("#payment_widget", { timeout: timeoutMs }).catch(() => null);
+  if (!iframeElement) return null;
+  const frame = await iframeElement.contentFrame();
+  if (!frame) return null;
+  await frame.waitForLoadState("domcontentloaded").catch(() => {});
+  return frame;
+}
 
-  // Check if payment widget is already present
-  let hasWidget = await page.locator("#payment_widget").count() > 0;
-
-  // If not, try navigating through any intermediate screens first
-  if (!hasWidget) {
-    log("Payment widget not immediately visible. Checking for intermediate screens...");
-    const navResult = await navigateToPaymentWidget(page, 15000);
-    if (navResult.skippedSteps.length > 0) {
-      log(`Navigated through: ${navResult.skippedSteps.join(", ")}`);
+/**
+ * Capture the UPI QR code image from the payment iframe.
+ * Tries two strategies:
+ *   1. Screenshot the QR wrapper element (larger, display-sized)
+ *   2. Extract the base64 data URL from the QR img src
+ * Returns base64-encoded PNG string, or null if not found.
+ */
+async function captureQrCode(frame: import("playwright").Frame): Promise<string | null> {
+  try {
+    // Strategy 1: Screenshot the QR wrapper container (rendered at display size)
+    const qrWrapper = frame.locator("div[class*='QrWrapper'], div[class*='qr-wrapper'], div[class*='QrImage']").first();
+    if (await qrWrapper.count() > 0 && await qrWrapper.isVisible().catch(() => false)) {
+      const buffer = await qrWrapper.screenshot();
+      log("Captured QR code via element screenshot");
+      return buffer.toString("base64");
     }
+
+    // Strategy 2: Extract the base64 data URL from the QR image
+    const qrDataImg = frame.locator("img[src^='data:image']").first();
+    if (await qrDataImg.count() > 0) {
+      const src = await qrDataImg.getAttribute("src");
+      if (src && src.startsWith("data:image/png;base64,")) {
+        log("Captured QR code via data URL extraction");
+        return src.replace("data:image/png;base64,", "");
+      }
+    }
+
+    // Strategy 3: Screenshot any visible canvas (some QR renderers use canvas)
+    const canvas = frame.locator("canvas").first();
+    if (await canvas.count() > 0 && await canvas.isVisible().catch(() => false)) {
+      const buffer = await canvas.screenshot();
+      log("Captured QR code via canvas screenshot");
+      return buffer.toString("base64");
+    }
+
+    log("Could not find QR code element to capture");
+    return null;
+  } catch (e) {
+    log(`QR capture failed: ${e}`);
+    return null;
+  }
+}
+
+/**
+ * Get available payment methods from the payment widget iframe.
+ * Returns structured list of methods with their status.
+ */
+export async function getPaymentMethods(page: Page): Promise<{
+  methods: Array<{
+    name: string;
+    type: string;
+    available: boolean;
+    details?: string;
+  }>;
+  hint?: string;
+}> {
+  log("Getting available payment methods...");
+
+  // Ensure we're on the checkout page with payment widget
+  let hasWidget = await page.locator("#payment_widget").count() > 0;
+  if (!hasWidget) {
+    log("Payment widget not visible. Trying to navigate to it...");
+    const navResult = await navigateToPaymentWidget(page, 15000);
     hasWidget = navResult.reached;
   }
 
-  // Now wait for the iframe
-  const iframeElement = await page.waitForSelector("#payment_widget", { timeout: 20000 }).catch(() => null);
-  if (!iframeElement) {
+  const frame = await getPaymentFrame(page);
+  if (!frame) {
     return {
-      upi_ids: [],
+      methods: [],
       hint: "Payment widget not found. Make sure checkout and address selection are complete.",
     };
   }
 
-  const frame = await iframeElement.contentFrame();
-  if (!frame) {
-    return { upi_ids: [] };
-  }
+  const methods: Array<{ name: string; type: string; available: boolean; details?: string }> = [];
+  const frameText = await frame.locator("body").innerText().catch(() => "");
 
-  await frame.waitForLoadState("networkidle");
+  // Detect available payment methods from iframe content
+  // Use :has-text() for substring matching since actual headers vary
+  // (e.g. "Add credit or debit cards" vs "credit or debit")
+  const methodChecks = [
+    { name: "Wallets", type: "wallets", text: "Wallets", selector: "text='Wallets'" },
+    { name: "Credit/Debit Cards", type: "card", text: "credit or debit", selector: "text=/credit or debit/i" },
+    { name: "Netbanking", type: "netbanking", text: "Netbanking", selector: "text='Netbanking'" },
+    { name: "UPI", type: "upi", text: "UPI", selector: "text='UPI'" },
+    { name: "Cash on Delivery", type: "cod", text: "Cash", selector: "text='Cash'" },
+    { name: "Pay Later", type: "pay_later", text: "Pay Later", selector: "text='Pay Later'" },
+  ];
 
-  const ids: string[] = [];
-  // Find elements that look like VPAs (contain @) inside the iframe
-  const vpaLocators = frame.locator("text=/@/");
-  const vpaCount = await vpaLocators.count();
-  for (let i = 0; i < vpaCount; i++) {
-    const text = await vpaLocators.nth(i).innerText();
-    if (text.includes("@")) {
-      ids.push(text.trim());
+  for (const check of methodChecks) {
+    const methodLocator = frame.locator(check.selector).first();
+    if (await methodLocator.count().catch(() => 0) > 0) {
+      let details: string | undefined;
+      const isAvailable = !frameText.includes(`${check.text}`) || true; // Present means available
+
+      // Check for specific details
+      if (check.type === "card") {
+        // Look for saved cards
+        const savedCard = frameText.match(/\*+\s*\d{4}/);
+        if (savedCard) {
+          details = `Saved card ending in ${savedCard[0].replace(/\*+\s*/, "")}`;
+        }
+      } else if (check.type === "cod") {
+        if (frameText.includes("not available")) {
+          details = "Not available for this order";
+        }
+      } else if (check.type === "upi") {
+        details = "QR code based — scan with any UPI app";
+      }
+
+      methods.push({
+        name: check.name,
+        type: check.type,
+        available: check.type === "cod" ? !frameText.includes("not available") : true,
+        details,
+      });
     }
   }
 
-  // Check for "Add new UPI ID" option
-  if (await frame.locator("text='Add new UPI ID'").count() > 0) {
-    ids.push("Add new UPI ID");
-  }
-
-  log(`Found UPI IDs: ${ids.join(", ")}`);
-  return { upi_ids: ids };
+  log(`Found ${methods.length} payment methods`);
+  return { methods };
 }
 
 /**
- * Select a UPI ID in the payment widget iframe.
- * Can select a saved VPA or enter a new one.
+ * Select/expand a payment method section in the iframe.
+ * For UPI, this expands the section and may generate a QR code.
+ * For Card, this expands and shows saved cards or input.
  */
-export async function selectUpiId(page: Page, upiId: string): Promise<{ selected: boolean }> {
-  log(`Selecting UPI ID: ${upiId}`);
+export async function selectPaymentMethod(page: Page, methodType: string): Promise<{
+  selected: boolean;
+  message: string;
+  action_needed?: string;
+  qr_image_base64?: string;
+}> {
+  log(`Selecting payment method: ${methodType}`);
 
-  const iframeElement = await page.waitForSelector("#payment_widget", { timeout: 30000 }).catch(() => null);
-  if (!iframeElement) {
-    throw new Error("Payment widget iframe not found");
-  }
-
-  const frame = await iframeElement.contentFrame();
+  const frame = await getPaymentFrame(page);
   if (!frame) {
-    throw new Error("Could not access payment iframe");
+    throw new Error("Payment widget not found. Complete checkout first.");
   }
 
-  // 1. Try clicking on a saved VPA
-  const savedVpa = frame.locator(`text='${upiId}'`);
-  if (await savedVpa.count() > 0) {
-    await savedVpa.first().click();
-    log(`Clicked saved VPA: ${upiId}`);
-    return { selected: true };
+  // Map method types to selectors for finding the section header
+  const methodMap: Record<string, { label: string; selector: string }> = {
+    upi: { label: "UPI", selector: "text='UPI'" },
+    card: { label: "Credit/Debit Cards", selector: "text=/credit or debit/i" },
+    netbanking: { label: "Netbanking", selector: "text='Netbanking'" },
+    wallets: { label: "Wallets", selector: "text='Wallets'" },
+    cod: { label: "Cash", selector: "text='Cash'" },
+    pay_later: { label: "Pay Later", selector: "text='Pay Later'" },
+  };
+
+  const method = methodMap[methodType.toLowerCase()];
+  if (!method) {
+    throw new Error(`Unknown payment method: ${methodType}. Available: ${Object.keys(methodMap).join(", ")}`);
   }
 
-  // 2. Expand UPI section if needed
-  const upiHeader = frame.locator("div").filter({ hasText: "UPI" }).last();
-  if (await upiHeader.count() > 0) {
-    await upiHeader.click();
-  }
-  await page.waitForTimeout(500);
-
-  // 3. Enter VPA in input
-  const inputLocator = frame.locator("input[placeholder*='UPI'], input[type='text']");
-  if (await inputLocator.count() > 0) {
-    await inputLocator.first().fill(upiId);
-    log(`Filled UPI ID: ${upiId}`);
+  // Click on the method header to expand it
+  const header = frame.locator(method.selector).first();
+  if (await header.count() === 0) {
+    throw new Error(`Payment method '${method.label}' not found on the payment page.`);
   }
 
-  // Click Verify
-  const verifyBtn = frame.locator("text='Verify'");
-  if (await verifyBtn.count() > 0) {
-    await verifyBtn.click();
-    log("Clicked Verify button.");
+  await header.click();
+  await page.waitForTimeout(2000);
+
+  // Handle method-specific behavior
+  if (methodType.toLowerCase() === "upi") {
+    // Check for "Generate QR" button
+    const generateQr = frame.locator("text='Generate QR'");
+    if (await generateQr.count() > 0 && await generateQr.first().isVisible().catch(() => false)) {
+      await generateQr.first().click();
+      log("Clicked 'Generate QR' for UPI payment");
+      await page.waitForTimeout(3000);
+    }
+
+    // Capture the QR code image
+    const qrBase64 = await captureQrCode(frame);
+
+    return {
+      selected: true,
+      message: "UPI selected. QR code generated.",
+      action_needed: "Scan the QR code with your UPI app (Google Pay, PhonePe, Paytm) to complete payment.",
+      qr_image_base64: qrBase64 ?? undefined,
+    };
   }
 
-  return { selected: true };
+  if (methodType.toLowerCase() === "card") {
+    // Check if saved card is present
+    const frameText = await frame.locator("body").innerText().catch(() => "");
+    const hasSavedCard = frameText.includes("CVV") || frameText.match(/\*+\s*\d{4}/);
+    if (hasSavedCard) {
+      return {
+        selected: true,
+        message: "Card payment selected. Saved card is available.",
+        action_needed: "Enter the CVV for your saved card, then use pay_now to complete payment.",
+      };
+    }
+    return {
+      selected: true,
+      message: "Card section expanded.",
+      action_needed: "Add a card or select a saved card, then use pay_now.",
+    };
+  }
+
+  return {
+    selected: true,
+    message: `${method.label} section expanded.`,
+  };
 }
 
 /**
  * Click the "Pay Now" button to initiate payment.
- * Tries multiple strategies: specific class match, text match, iframe.
+ * The Pay Now button is on the MAIN PAGE (not inside the iframe).
  */
 export async function payNow(page: Page): Promise<{ message: string }> {
   log("Clicking Pay Now...");
 
-  // Strategy 1: Specific class match
-  const payBtnSpecific = page.locator("div[class*='Zpayments__Button']:has-text('Pay Now')");
-  if (await payBtnSpecific.count() > 0 && await payBtnSpecific.first().isVisible().catch(() => false)) {
-    await payBtnSpecific.first().click();
-    log("Clicked 'Pay Now'. Please approve the payment on your UPI app.");
-    return { message: "Pay Now clicked. Approve payment on your UPI app." };
+  // Strategy 1: Look for "Pay Now" on the main page (outside iframe)
+  // It's typically in the right sidebar / order summary area
+  const payBtnOnPage = page.locator("button:has-text('Pay Now'), div:has-text('Pay Now')").last();
+  if (await payBtnOnPage.count() > 0 && await payBtnOnPage.isVisible().catch(() => false)) {
+    await payBtnOnPage.click();
+    log("Clicked 'Pay Now' on main page.");
+    return { message: "Pay Now clicked. Complete payment on your device (approve UPI request or enter OTP for card)." };
   }
 
-  // Strategy 2: Text match on page
-  const payBtnText = page.locator("div, button").filter({ hasText: "Pay Now" }).last();
-  if (await payBtnText.count() > 0 && await payBtnText.isVisible().catch(() => false)) {
-    await payBtnText.click();
-    log("Clicked 'Pay Now'. Please approve the payment on your UPI app.");
-    return { message: "Pay Now clicked. Approve payment on your UPI app." };
-  }
-
-  // Strategy 3: Check inside iframe
-  const iframeElement = await page.waitForSelector("#payment_widget", { timeout: 5000 }).catch(() => null);
-  if (iframeElement) {
-    const frame = await iframeElement.contentFrame();
-    if (frame) {
-      const frameBtn = frame.locator("text='Pay Now'");
-      if (await frameBtn.count() > 0) {
-        await frameBtn.first().click();
-        log("Clicked 'Pay Now' inside iframe.");
-        return { message: "Pay Now clicked inside iframe. Approve payment on your UPI app." };
-      }
+  // Strategy 2: Try inside iframe as fallback
+  const frame = await getPaymentFrame(page, 5000);
+  if (frame) {
+    const frameBtn = frame.locator("text='Pay Now'");
+    if (await frameBtn.count() > 0 && await frameBtn.first().isVisible().catch(() => false)) {
+      await frameBtn.first().click();
+      log("Clicked 'Pay Now' inside payment iframe.");
+      return { message: "Pay Now clicked. Complete payment on your device." };
     }
   }
 
-  throw new Error("Could not find 'Pay Now' button.");
+  // Strategy 3: Try Zpayments-specific button
+  const zpayBtn = page.locator("div[class*='Zpayments__Button']:has-text('Pay Now')");
+  if (await zpayBtn.count() > 0 && await zpayBtn.first().isVisible().catch(() => false)) {
+    await zpayBtn.first().click();
+    log("Clicked 'Pay Now' Zpayments button.");
+    return { message: "Pay Now clicked. Complete payment on your device." };
+  }
+
+  throw new Error("Could not find 'Pay Now' button. Make sure you are on the payment page and have selected a payment method.");
 }
 
 /**

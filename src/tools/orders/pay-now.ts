@@ -4,7 +4,7 @@ import { PaymentService } from "../../services/payment-service.ts";
 
 export const payNowTool = {
   name: "pay_now",
-  description: "Click the 'Pay Now' button to complete the transaction. Make sure you have selected a payment method first.",
+  description: "Click the 'Pay Now' button on the checkout page to complete the transaction. For card payment, CVV must be entered first. For UPI, the QR code must be scanned first.",
   inputSchema: {},
   handler: async (_input: {}, ctx: AppContext) => {
     if (!ctx.sessionManager.isAuthenticated()) {
