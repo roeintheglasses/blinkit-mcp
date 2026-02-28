@@ -118,7 +118,7 @@ export async function enterOtpFlow(
   if (!loggedIn) {
     const cookies = await context.cookies("https://blinkit.com");
     const hasAuthCookie = cookies.some(
-      (c) => c.name === "auth_key" || c.name === "access_token" || c.name === "_session_token"
+      (c) => c.name === "gr_1_accessToken" || c.name === "auth_key" || c.name === "access_token" || c.name === "_session_token"
     );
     if (hasAuthCookie) {
       log("UI check failed but auth cookies found -- treating as logged in");

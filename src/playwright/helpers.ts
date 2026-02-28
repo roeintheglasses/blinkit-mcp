@@ -38,23 +38,36 @@ export async function debugStep(page: Page, label: string): Promise<void> {
 
 // ─── Shared page helpers ─────────────────────────────────────────────────────
 
-/** Check if user is logged in by looking at UI state */
+/** Check if user is logged in by looking at UI state + cookies */
 export async function checkLoggedIn(page: Page): Promise<boolean> {
   try {
-    // Positive indicators -- these confirm the user IS logged in
-    // Blinkit shows "Account" (not "My Account") in the header when logged in
+    // 1. Positive UI indicators -- confirm user IS logged in
+    // Blinkit shows "Account" (not "My Account") in the header on homepage
     if (await page.isVisible("text='My Account'").catch(() => false)) return true;
     if (await page.isVisible("text='Account'").catch(() => false)) return true;
     if (await page.isVisible(".user-profile").catch(() => false)) return true;
     if (await page.locator("div[class*='ProfileButton'], div[class*='AccountButton'], div[class*='UserProfile']")
       .first().isVisible({ timeout: 1000 }).catch(() => false)) return true;
 
-    // Negative indicator -- if Login button IS visible, user is definitely NOT logged in
+    // 2. Negative UI indicator -- Login button IS visible = definitely NOT logged in
     const loginVisible = await page.isVisible("text='Login'").catch(() => false);
     if (loginVisible) return false;
 
-    // If neither positive nor negative indicators found (e.g., overlay blocking, page loading),
-    // default to not logged in to avoid false positives
+    // 3. UI is inconclusive (e.g., search page has no Account/Login text in header).
+    //    Fall back to checking auth cookies — Blinkit uses gr_1_accessToken.
+    try {
+      const cookies = await page.context().cookies("https://blinkit.com");
+      const hasAuth = cookies.some(
+        (c) => c.name === "gr_1_accessToken" || c.name === "auth_key" || c.name === "access_token"
+      );
+      if (hasAuth) {
+        log("UI login indicators absent but auth cookies found — treating as logged in");
+        return true;
+      }
+    } catch {
+      // Cookie check failed — fall through
+    }
+
     return false;
   } catch {
     return false;

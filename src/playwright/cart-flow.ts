@@ -46,36 +46,50 @@ export async function addToCart(
     }
   }
 
-  // Find the ADD button inside the card
+  // Check if item is already in cart (quantity controls visible instead of ADD)
   const addBtn = card.locator("div").filter({ hasText: "ADD" }).last();
+  const alreadyInCart = await card.locator(".icon-plus, .icon-minus").count() > 0;
   let itemsToAdd = quantity;
   let actualAdded = 0;
 
-  // If ADD button is visible, click it once to start
-  if (await addBtn.isVisible().catch(() => false)) {
+  if (alreadyInCart) {
+    log(`Product ${productId} is already in cart. Using +/- controls to adjust quantity.`);
+  }
+
+  // If ADD button is visible (not yet in cart), click it once to start
+  if (!alreadyInCart && await addBtn.isVisible().catch(() => false)) {
     await addBtn.click();
     log(`Clicked ADD for product ${productId} (1/${quantity}).`);
     itemsToAdd--;
     actualAdded++;
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(800);
   }
 
-  // Use increment button for remaining quantity
+  // Use increment button for remaining quantity (or all of it if already in cart)
   if (itemsToAdd > 0) {
-    await page.waitForTimeout(1000);
+    if (!alreadyInCart) await page.waitForTimeout(500);
 
-    // Find the + button
-    const plusBtn = card.locator(".icon-plus").first();
-    let plusClickable;
-    if (await plusBtn.count() > 0) {
-      plusClickable = plusBtn.locator("..");
+    // Find the + button — click the icon element directly (not parent)
+    const plusIcon = card.locator(".icon-plus").first();
+    if (await plusIcon.count() === 0) {
+      // Fallback: try text-based + button
+      const plusText = card.locator("button, div, span").filter({ hasText: /^\+$/ }).first();
+      if (await plusText.count() === 0) {
+        if (actualAdded === 0) {
+          throw new Error(`Product ${productId}: cannot find ADD or + button. Item may be out of stock.`);
+        }
+        log(`Could not find + button for remaining quantity, but ${actualAdded} already added.`);
+      } else {
+        for (let i = 0; i < itemsToAdd; i++) {
+          await plusText.click();
+          actualAdded++;
+          log(`Incrementing via text + for ${productId} (${actualAdded}/${quantity}).`);
+          await page.waitForTimeout(500);
+        }
+      }
     } else {
-      plusClickable = card.locator("text='+'").first();
-    }
-
-    if (await plusClickable.isVisible().catch(() => false)) {
       for (let i = 0; i < itemsToAdd; i++) {
-        await plusClickable.click();
+        await plusIcon.click();
         actualAdded++;
         log(`Incrementing quantity for ${productId} (${actualAdded}/${quantity}).`);
 
@@ -97,8 +111,6 @@ export async function addToCart(
 
         await page.waitForTimeout(500);
       }
-    } else {
-      log(`Could not find '+' button for remaining quantity of ${productId}.`);
     }
   }
 
