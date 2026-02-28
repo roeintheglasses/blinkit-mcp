@@ -1,5 +1,6 @@
 import type { Page } from "playwright";
 import { debugStep, isStoreClosed, navigateToPaymentWidget } from "./helpers.ts";
+import { SELECTORS } from "./selectors.ts";
 
 function log(msg: string): void {
   process.stderr.write(`[playwright] ${msg}\n`);
@@ -21,25 +22,25 @@ export async function setLocation(
   await debugStep(page, `Setting location to: ${locationName}`);
 
   // Check if location input modal is already open
-  if (!await page.isVisible("input[name='select-locality']").catch(() => false)) {
+  if (!await page.isVisible(SELECTORS.LOCATION_INPUT_NAME).catch(() => false)) {
     // Click location bar to open modal
-    if (await page.isVisible("div[class*='LocationBar__Container']")) {
-      await page.click("div[class*='LocationBar__Container']");
+    if (await page.isVisible(SELECTORS.LOCATION_BAR)) {
+      await page.click(SELECTORS.LOCATION_BAR);
     }
 
     // Wait for location input
     await page.waitForSelector(
-      "input[name='select-locality'], input[placeholder*='search delivery location']",
+      SELECTORS.LOCATION_INPUT,
       { state: "visible", timeout: 30000 }
     );
   }
 
-  const locInput = page.locator("input[name='select-locality'], input[placeholder*='search delivery location']").first();
+  const locInput = page.locator(SELECTORS.LOCATION_INPUT).first();
   await locInput.fill(locationName);
   await page.waitForTimeout(1000);
 
   // Select first result
-  const firstResult = page.locator("div[class*='LocationSearchBox__LocationItemContainer']").first();
+  const firstResult = page.locator(SELECTORS.LOCATION_SEARCH_RESULT).first();
   if (await firstResult.isVisible().catch(() => false)) {
     await firstResult.click();
     log("Selected first location result.");
@@ -51,7 +52,7 @@ export async function setLocation(
   await page.waitForTimeout(2000);
 
   // Check if new location is unavailable
-  if (await page.isVisible("text='Currently unavailable'").catch(() => false)) {
+  if (await page.isVisible(SELECTORS.CURRENTLY_UNAVAILABLE).catch(() => false)) {
     return { location_set: true, warning: "Store is marked as 'Currently unavailable' at this location." };
   }
 
@@ -73,7 +74,7 @@ export async function getAddresses(page: Page): Promise<{
   }
 
   // Check if address selection modal is visible
-  if (!await page.isVisible("text='Select delivery address'").catch(() => false)) {
+  if (!await page.isVisible(SELECTORS.SELECT_DELIVERY_ADDRESS).catch(() => false)) {
     log("Address selection modal not visible.");
     return {
       addresses: [],
@@ -83,14 +84,14 @@ export async function getAddresses(page: Page): Promise<{
 
   log("Address modal detected. Parsing addresses...");
   const addresses: Array<{ index: number; label: string; address_line: string; is_default: boolean }> = [];
-  const items = page.locator("div[class*='AddressList__AddressItemWrapper']");
+  const items = page.locator(SELECTORS.ADDRESS_ITEM);
   const itemCount = await items.count();
 
   for (let i = 0; i < itemCount; i++) {
     try {
       const item = items.nth(i);
-      const labelEl = item.locator("div[class*='AddressList__AddressLabel']");
-      const detailsEl = item.locator("div[class*='AddressList__AddressDetails']").last();
+      const labelEl = item.locator(SELECTORS.ADDRESS_LABEL);
+      const detailsEl = item.locator(SELECTORS.ADDRESS_DETAILS).last();
 
       const label = await labelEl.count() > 0 ? await labelEl.innerText() : "Unknown";
       const details = await detailsEl.count() > 0 ? await detailsEl.innerText() : "";
@@ -122,7 +123,7 @@ export async function selectAddress(
     throw new Error(`CRITICAL: ${storeStatus}`);
   }
 
-  const items = page.locator("div[class*='AddressList__AddressItemWrapper']");
+  const items = page.locator(SELECTORS.ADDRESS_ITEM);
   if (index >= await items.count()) {
     throw new Error(`Invalid address index: ${index}`);
   }

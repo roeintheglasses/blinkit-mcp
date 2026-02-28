@@ -1,5 +1,6 @@
 import type { Page, BrowserContext } from "playwright";
 import { debugStep, checkLoggedIn } from "./helpers.ts";
+import { SELECTORS } from "./selectors.ts";
 
 function log(msg: string): void {
   process.stderr.write(`[playwright] ${msg}\n`);
@@ -21,12 +22,12 @@ export async function loginFlow(page: Page, phoneNumber: string): Promise<void> 
 
   // Click Login button -- try multiple strategies
   await debugStep(page, "Looking for Login button");
-  if (await page.isVisible("text='Login'")) {
+  if (await page.isVisible(SELECTORS.LOGIN_BUTTON)) {
     await debugStep(page, "Clicking Login text button");
-    await page.click("text='Login'");
-  } else if (await page.isVisible("div[class*='ProfileButton__Container']")) {
+    await page.click(SELECTORS.LOGIN_BUTTON);
+  } else if (await page.isVisible(SELECTORS.PROFILE_BUTTON_CONTAINER)) {
     await debugStep(page, "Clicking ProfileButton container");
-    await page.locator("div[class*='ProfileButton__Container']").click();
+    await page.locator(SELECTORS.PROFILE_BUTTON_CONTAINER).click();
   } else {
     log("Login button not found, checking if already on login screen");
   }
@@ -35,7 +36,7 @@ export async function loginFlow(page: Page, phoneNumber: string): Promise<void> 
   // Wait for phone input
   await debugStep(page, "Waiting for phone number input");
   const phoneInput = await page.waitForSelector(
-    "input[type='tel'], input[name='mobile'], input[type='text']",
+    SELECTORS.PHONE_INPUT,
     { state: "visible", timeout: 30000 }
   );
   if (phoneInput) {
@@ -46,10 +47,10 @@ export async function loginFlow(page: Page, phoneNumber: string): Promise<void> 
 
     // Submit
     await debugStep(page, "Submitting phone number");
-    if (await page.isVisible("text='Next'")) {
-      await page.click("text='Next'");
-    } else if (await page.isVisible("text='Continue'")) {
-      await page.click("text='Continue'");
+    if (await page.isVisible(SELECTORS.NEXT_BUTTON)) {
+      await page.click(SELECTORS.NEXT_BUTTON);
+    } else if (await page.isVisible(SELECTORS.CONTINUE_BUTTON)) {
+      await page.click(SELECTORS.CONTINUE_BUTTON);
     } else {
       await page.keyboard.press("Enter");
     }
@@ -68,13 +69,13 @@ export async function enterOtpFlow(
   storageStatePath: string
 ): Promise<{ logged_in: boolean }> {
   await debugStep(page, "Waiting for OTP input fields");
-  await page.waitForSelector("input", { timeout: 30000 });
-  const inputs = page.locator("input");
+  await page.waitForSelector(SELECTORS.OTP_INPUT_GENERIC, { timeout: 30000 });
+  const inputs = page.locator(SELECTORS.OTP_INPUT_GENERIC);
   const count = await inputs.count();
 
   if (count >= 4) {
     await debugStep(page, "Filling 4-digit OTP inputs");
-    const otpInputs = page.locator("input[inputmode='numeric']");
+    const otpInputs = page.locator(SELECTORS.OTP_INPUT_NUMERIC);
     const otpCount = await otpInputs.count();
     if (otpCount >= 4) {
       for (let i = 0; i < 4; i++) {
@@ -89,11 +90,11 @@ export async function enterOtpFlow(
     }
   } else {
     await debugStep(page, "Filling single OTP input");
-    const otpInput = page.locator("input[data-test-id='otp-input'], input[name*='otp'], input[id*='otp']").first();
+    const otpInput = page.locator(SELECTORS.OTP_INPUT_NAMED).first();
     if (await otpInput.isVisible().catch(() => false)) {
       await otpInput.fill(otp);
     } else {
-      await page.fill("input", otp);
+      await page.fill(SELECTORS.OTP_INPUT_GENERIC, otp);
     }
   }
 

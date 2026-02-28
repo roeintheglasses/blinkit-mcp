@@ -32,6 +32,7 @@ import { trackOrderTool } from "./tools/orders/track-order.ts";
 import { getPaymentMethodsTool } from "./tools/orders/get-payment-methods.ts";
 import { selectPaymentMethodTool } from "./tools/orders/select-payment-method.ts";
 import { payNowTool } from "./tools/orders/pay-now.ts";
+import { quickUpiCheckoutTool } from "./tools/orders/quick-upi-checkout.ts";
 
 type ContentBlock =
   | { type: "text"; text: string }
@@ -70,6 +71,7 @@ const ALL_TOOLS: ToolDef[] = [
   getPaymentMethodsTool,
   selectPaymentMethodTool,
   payNowTool,
+  quickUpiCheckoutTool,
 ];
 
 export function createServer(ctx: AppContext): McpServer {
@@ -89,8 +91,18 @@ export function createServer(ctx: AppContext): McpServer {
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           ctx.logger.error(`Tool '${tool.name}' failed: ${message}`);
+
+          let errorText = `Error: ${message}`;
+
+          if (ctx.config.screenshot_on_error) {
+            const screenshotPath = await ctx.browserManager.captureErrorScreenshot(tool.name);
+            if (screenshotPath) {
+              errorText += `\n\nDebug screenshot saved to: ${screenshotPath}`;
+            }
+          }
+
           return {
-            content: [{ type: "text" as const, text: `Error: ${message}` }],
+            content: [{ type: "text" as const, text: errorText }],
             isError: true,
           };
         }

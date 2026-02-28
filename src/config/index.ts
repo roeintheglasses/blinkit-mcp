@@ -29,6 +29,7 @@ function loadEnvOverrides(): Record<string, unknown> {
   if (env.BLINKIT_HEADLESS) overrides.headless = env.BLINKIT_HEADLESS !== "false";
   if (env.BLINKIT_DEBUG) overrides.debug = env.BLINKIT_DEBUG === "true";
   if (env.BLINKIT_SLOW_MO) overrides.slow_mo = Number(env.BLINKIT_SLOW_MO);
+  if (env.BLINKIT_SCREENSHOT_ON_ERROR) overrides.screenshot_on_error = env.BLINKIT_SCREENSHOT_ON_ERROR !== "false";
   return overrides;
 }
 

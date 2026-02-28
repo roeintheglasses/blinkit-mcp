@@ -6,6 +6,7 @@ import type { Logger } from "./logger.ts";
 import type { BlinkitConfig } from "../config/schema.ts";
 import type { SessionManager } from "./session-manager.ts";
 import { CONFIG_DIR, COOKIES_DIR, STORAGE_STATE_FILE } from "../constants.ts";
+import { SELECTORS } from "../playwright/selectors.ts";
 
 export class BrowserManager {
   private browser: Browser | null = null;
@@ -109,7 +110,7 @@ export class BrowserManager {
 
     // Handle "Detect my location" popup
     try {
-      const locationBtn = this.page.locator("button").filter({ hasText: "Detect my location" });
+      const locationBtn = this.page.locator("button").filter({ hasText: SELECTORS.DETECT_MY_LOCATION });
       try {
         await locationBtn.waitFor({ state: "visible", timeout: 3000 });
         this.logger.info("Location popup detected. Clicking 'Detect my location'...");
@@ -155,6 +156,28 @@ export class BrowserManager {
       this.browser = null;
       this.context = null;
       this.page = null;
+    }
+  }
+
+  async captureErrorScreenshot(toolName: string): Promise<string | null> {
+    try {
+      if (!this.page || this.page.isClosed()) return null;
+
+      const debugDir = join(homedir(), CONFIG_DIR, "debug-screenshots");
+      if (!existsSync(debugDir)) {
+        mkdirSync(debugDir, { recursive: true, mode: 0o700 });
+      }
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const filename = `${toolName}-${timestamp}.png`;
+      const filePath = join(debugDir, filename);
+
+      await this.page.screenshot({ path: filePath, fullPage: false });
+      this.logger.info(`Debug screenshot saved to ${filePath}`);
+      return filePath;
+    } catch (e) {
+      this.logger.debug(`Failed to capture error screenshot: ${e}`);
+      return null;
     }
   }
 

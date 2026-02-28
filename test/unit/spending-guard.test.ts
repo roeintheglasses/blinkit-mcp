@@ -8,6 +8,7 @@ describe("SpendingGuard", () => {
     headless: true,
     debug: false,
     slow_mo: 0,
+    screenshot_on_error: true,
   });
 
   test("allows under warning threshold", () => {
@@ -63,6 +64,7 @@ describe("SpendingGuard", () => {
       headless: true,
       debug: false,
       slow_mo: 0,
+      screenshot_on_error: true,
     });
 
     expect(customGuard.check(50).warning).toBeUndefined();

@@ -1,4 +1,5 @@
 import type { Page } from "playwright";
+import { SELECTORS } from "./selectors.ts";
 
 /** Module-level debug mode flag — set this to enable debug helpers */
 export let debugMode = false;
@@ -43,14 +44,14 @@ export async function checkLoggedIn(page: Page): Promise<boolean> {
   try {
     // 1. Positive UI indicators -- confirm user IS logged in
     // Blinkit shows "Account" (not "My Account") in the header on homepage
-    if (await page.isVisible("text='My Account'").catch(() => false)) return true;
-    if (await page.isVisible("text='Account'").catch(() => false)) return true;
-    if (await page.isVisible(".user-profile").catch(() => false)) return true;
-    if (await page.locator("div[class*='ProfileButton'], div[class*='AccountButton'], div[class*='UserProfile']")
+    if (await page.isVisible(SELECTORS.MY_ACCOUNT).catch(() => false)) return true;
+    if (await page.isVisible(SELECTORS.ACCOUNT).catch(() => false)) return true;
+    if (await page.isVisible(SELECTORS.USER_PROFILE).catch(() => false)) return true;
+    if (await page.locator(SELECTORS.PROFILE_BUTTON)
       .first().isVisible({ timeout: 1000 }).catch(() => false)) return true;
 
     // 2. Negative UI indicator -- Login button IS visible = definitely NOT logged in
-    const loginVisible = await page.isVisible("text='Login'").catch(() => false);
+    const loginVisible = await page.isVisible(SELECTORS.LOGIN_BUTTON).catch(() => false);
     if (loginVisible) return false;
 
     // 3. UI is inconclusive (e.g., search page has no Account/Login text in header).
@@ -77,16 +78,16 @@ export async function checkLoggedIn(page: Page): Promise<boolean> {
 /** Check if store is closed or unavailable */
 export async function isStoreClosed(page: Page): Promise<string | false> {
   try {
-    if (await page.isVisible("text='Store is closed'").catch(() => false)) {
+    if (await page.isVisible(SELECTORS.STORE_CLOSED).catch(() => false)) {
       return "Store is closed.";
     }
-    if (await page.isVisible("text=\"Sorry, can't take your order\"").catch(() => false)) {
+    if (await page.isVisible(SELECTORS.STORE_UNAVAILABLE_MODAL).catch(() => false)) {
       return "Sorry, can't take your order. Store is unavailable.";
     }
-    if (await page.isVisible("text='Currently unavailable'").catch(() => false)) {
+    if (await page.isVisible(SELECTORS.CURRENTLY_UNAVAILABLE).catch(() => false)) {
       return "Store is currently unavailable at this location.";
     }
-    if (await page.isVisible("text='High Demand'").catch(() => false)) {
+    if (await page.isVisible(SELECTORS.HIGH_DEMAND).catch(() => false)) {
       return "Store is experiencing high demand. Please try again later.";
     }
   } catch {
@@ -105,16 +106,16 @@ export async function navigateToPaymentWidget(page: Page, timeoutMs = 20000): Pr
 
   while (Date.now() < deadline) {
     // Check if payment widget is already present
-    if (await page.locator("#payment_widget").count() > 0) {
+    if (await page.locator(SELECTORS.PAYMENT_WIDGET).count() > 0) {
       return { reached: true, skippedSteps };
     }
 
     // Check for delivery tip screen
-    const tipSection = page.locator("text=/[Dd]elivery [Tt]ip/, text=/[Aa]dd [Tt]ip/, text=/[Tt]ip your delivery/");
+    const tipSection = page.locator(SELECTORS.TIP_SECTION);
     if (await tipSection.count() > 0) {
       log("Detected delivery tip screen. Looking for skip/proceed option...");
       // Try "No tip" or "Skip" first
-      const noTip = page.locator("text=/[Nn]o [Tt]ip/, text=/[Ss]kip/");
+      const noTip = page.locator(SELECTORS.NO_TIP);
       if (await noTip.count() > 0) {
         await noTip.first().click();
         skippedSteps.push("delivery_tip_skipped");
@@ -132,10 +133,7 @@ export async function navigateToPaymentWidget(page: Page, timeoutMs = 20000): Pr
     }
 
     // Check for "Proceed to Pay" / "Proceed to Payment" button
-    const proceedToPay = page.locator(
-      "button:has-text('Proceed to Pay'), div:has-text('Proceed to Pay'), " +
-      "button:has-text('Proceed to Payment'), button:has-text('Continue to Payment')"
-    );
+    const proceedToPay = page.locator(SELECTORS.PROCEED_TO_PAY);
     if (await proceedToPay.count() > 0 && await proceedToPay.last().isVisible().catch(() => false)) {
       await proceedToPay.last().click();
       skippedSteps.push("proceed_to_pay_clicked");
@@ -155,7 +153,7 @@ export async function navigateToPaymentWidget(page: Page, timeoutMs = 20000): Pr
     }
 
     // Check for dismissible overlays/modals
-    const closeBtn = page.locator("button[aria-label='close'], button[aria-label='Close'], div[class*='close']");
+    const closeBtn = page.locator(SELECTORS.CLOSE_MODAL);
     if (await closeBtn.count() > 0 && await closeBtn.first().isVisible().catch(() => false)) {
       await closeBtn.first().click();
       skippedSteps.push("modal_dismissed");

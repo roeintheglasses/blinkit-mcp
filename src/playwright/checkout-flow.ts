@@ -1,5 +1,6 @@
 import type { Page } from "playwright";
 import { isStoreClosed, navigateToPaymentWidget } from "./helpers.ts";
+import { SELECTORS } from "./selectors.ts";
 import QRCode from "qrcode";
 
 function log(msg: string): void {
@@ -25,7 +26,7 @@ export async function checkout(page: Page): Promise<{
   // If Proceed not visible, try opening the cart first
   if (!await proceedBtn.isVisible().catch(() => false)) {
     log("Proceed button not visible. Attempting to open Cart drawer...");
-    const cartBtn = page.locator("div[class*='CartButton__Button'], div[class*='CartButton__Container'], div[class*='CartButton']");
+    const cartBtn = page.locator(SELECTORS.CART_BUTTON_FULL);
     if (await cartBtn.count() > 0) {
       await cartBtn.first().click();
       log("Clicked cart button.");
@@ -42,12 +43,12 @@ export async function checkout(page: Page): Promise<{
     await page.waitForTimeout(3000);
 
     // Detect what state we landed in
-    if (await page.isVisible("text='Select delivery address'").catch(() => false)) {
+    if (await page.isVisible(SELECTORS.SELECT_DELIVERY_ADDRESS).catch(() => false)) {
       return {
         next_step: "select_address",
         message: "Checkout initiated. Address selection is showing. Use get_saved_addresses then select_address.",
       };
-    } else if (await page.locator("#payment_widget").count() > 0) {
+    } else if (await page.locator(SELECTORS.PAYMENT_WIDGET).count() > 0) {
       return {
         next_step: "payment",
         message: "Checkout initiated. Payment page is ready. Use get_payment_methods to see available options.",
@@ -80,7 +81,7 @@ export async function checkout(page: Page): Promise<{
  * Returns null if iframe not found or not accessible.
  */
 async function getPaymentFrame(page: Page, timeoutMs = 15000) {
-  const iframeElement = await page.waitForSelector("#payment_widget", { timeout: timeoutMs }).catch(() => null);
+  const iframeElement = await page.waitForSelector(SELECTORS.PAYMENT_WIDGET, { timeout: timeoutMs }).catch(() => null);
   if (!iframeElement) return null;
   const frame = await iframeElement.contentFrame();
   if (!frame) return null;
@@ -179,7 +180,7 @@ async function captureQrCode(frame: import("playwright").Frame): Promise<{
     // Capture the QR image ---
 
     // Strategy 1: Screenshot the QR wrapper container
-    const qrWrapper = frame.locator("div[class*='QrWrapper'], div[class*='qr-wrapper'], div[class*='QrImage']").first();
+    const qrWrapper = frame.locator(SELECTORS.QR_WRAPPER).first();
     if (await qrWrapper.count() > 0 && await qrWrapper.isVisible().catch(() => false)) {
       pngBuffer = await qrWrapper.screenshot() as Buffer;
       base64 = pngBuffer.toString("base64");
@@ -188,7 +189,7 @@ async function captureQrCode(frame: import("playwright").Frame): Promise<{
 
     // Strategy 2: Extract the base64 data URL from the QR image element
     if (!base64) {
-      const qrDataImg = frame.locator("img[src^='data:image']").first();
+      const qrDataImg = frame.locator(SELECTORS.QR_DATA_IMAGE).first();
       if (await qrDataImg.count() > 0) {
         const src = await qrDataImg.getAttribute("src");
         if (src && src.startsWith("data:image/png;base64,")) {
@@ -201,7 +202,7 @@ async function captureQrCode(frame: import("playwright").Frame): Promise<{
 
     // Strategy 3: Screenshot any visible canvas
     if (!base64) {
-      const canvas = frame.locator("canvas").first();
+      const canvas = frame.locator(SELECTORS.CANVAS).first();
       if (await canvas.count() > 0 && await canvas.isVisible().catch(() => false)) {
         pngBuffer = await canvas.screenshot() as Buffer;
         base64 = pngBuffer.toString("base64");
@@ -269,7 +270,7 @@ export async function getPaymentMethods(page: Page): Promise<{
   log("Getting available payment methods...");
 
   // Ensure we're on the checkout page with payment widget
-  let hasWidget = await page.locator("#payment_widget").count() > 0;
+  let hasWidget = await page.locator(SELECTORS.PAYMENT_WIDGET).count() > 0;
   if (!hasWidget) {
     log("Payment widget not visible. Trying to navigate to it...");
     const navResult = await navigateToPaymentWidget(page, 15000);
@@ -291,12 +292,12 @@ export async function getPaymentMethods(page: Page): Promise<{
   // Use :has-text() for substring matching since actual headers vary
   // (e.g. "Add credit or debit cards" vs "credit or debit")
   const methodChecks = [
-    { name: "Wallets", type: "wallets", text: "Wallets", selector: "text='Wallets'" },
-    { name: "Credit/Debit Cards", type: "card", text: "credit or debit", selector: "text=/credit or debit/i" },
-    { name: "Netbanking", type: "netbanking", text: "Netbanking", selector: "text='Netbanking'" },
-    { name: "UPI", type: "upi", text: "UPI", selector: "text='UPI'" },
-    { name: "Cash on Delivery", type: "cod", text: "Cash", selector: "text='Cash'" },
-    { name: "Pay Later", type: "pay_later", text: "Pay Later", selector: "text='Pay Later'" },
+    { name: "Wallets", type: "wallets", text: "Wallets", selector: SELECTORS.PAYMENT_WALLETS },
+    { name: "Credit/Debit Cards", type: "card", text: "credit or debit", selector: SELECTORS.PAYMENT_CARD },
+    { name: "Netbanking", type: "netbanking", text: "Netbanking", selector: SELECTORS.PAYMENT_NETBANKING },
+    { name: "UPI", type: "upi", text: "UPI", selector: SELECTORS.PAYMENT_UPI },
+    { name: "Cash on Delivery", type: "cod", text: "Cash", selector: SELECTORS.PAYMENT_CASH },
+    { name: "Pay Later", type: "pay_later", text: "Pay Later", selector: SELECTORS.PAYMENT_PAY_LATER },
   ];
 
   for (const check of methodChecks) {
@@ -355,12 +356,12 @@ export async function selectPaymentMethod(page: Page, methodType: string): Promi
 
   // Map method types to selectors for finding the section header
   const methodMap: Record<string, { label: string; selector: string }> = {
-    upi: { label: "UPI", selector: "text='UPI'" },
-    card: { label: "Credit/Debit Cards", selector: "text=/credit or debit/i" },
-    netbanking: { label: "Netbanking", selector: "text='Netbanking'" },
-    wallets: { label: "Wallets", selector: "text='Wallets'" },
-    cod: { label: "Cash", selector: "text='Cash'" },
-    pay_later: { label: "Pay Later", selector: "text='Pay Later'" },
+    upi: { label: "UPI", selector: SELECTORS.PAYMENT_UPI },
+    card: { label: "Credit/Debit Cards", selector: SELECTORS.PAYMENT_CARD },
+    netbanking: { label: "Netbanking", selector: SELECTORS.PAYMENT_NETBANKING },
+    wallets: { label: "Wallets", selector: SELECTORS.PAYMENT_WALLETS },
+    cod: { label: "Cash", selector: SELECTORS.PAYMENT_CASH },
+    pay_later: { label: "Pay Later", selector: SELECTORS.PAYMENT_PAY_LATER },
   };
 
   const method = methodMap[methodType.toLowerCase()];
@@ -380,7 +381,7 @@ export async function selectPaymentMethod(page: Page, methodType: string): Promi
   // Handle method-specific behavior
   if (methodType.toLowerCase() === "upi") {
     // Check for "Generate QR" button
-    const generateQr = frame.locator("text='Generate QR'");
+    const generateQr = frame.locator(SELECTORS.GENERATE_QR);
     if (await generateQr.count() > 0 && await generateQr.first().isVisible().catch(() => false)) {
       await generateQr.first().click();
       log("Clicked 'Generate QR' for UPI payment");
@@ -433,7 +434,7 @@ export async function payNow(page: Page): Promise<{ message: string }> {
 
   // Strategy 1: Look for "Pay Now" on the main page (outside iframe)
   // It's typically in the right sidebar / order summary area
-  const payBtnOnPage = page.locator("button:has-text('Pay Now'), div:has-text('Pay Now')").last();
+  const payBtnOnPage = page.locator(SELECTORS.PAY_NOW_BUTTON).last();
   if (await payBtnOnPage.count() > 0 && await payBtnOnPage.isVisible().catch(() => false)) {
     await payBtnOnPage.click();
     log("Clicked 'Pay Now' on main page.");
@@ -443,7 +444,7 @@ export async function payNow(page: Page): Promise<{ message: string }> {
   // Strategy 2: Try inside iframe as fallback
   const frame = await getPaymentFrame(page, 5000);
   if (frame) {
-    const frameBtn = frame.locator("text='Pay Now'");
+    const frameBtn = frame.locator(SELECTORS.PAY_NOW_FRAME);
     if (await frameBtn.count() > 0 && await frameBtn.first().isVisible().catch(() => false)) {
       await frameBtn.first().click();
       log("Clicked 'Pay Now' inside payment iframe.");
@@ -452,7 +453,7 @@ export async function payNow(page: Page): Promise<{ message: string }> {
   }
 
   // Strategy 3: Try Zpayments-specific button
-  const zpayBtn = page.locator("div[class*='Zpayments__Button']:has-text('Pay Now')");
+  const zpayBtn = page.locator(SELECTORS.ZPAYMENTS_PAY_NOW);
   if (await zpayBtn.count() > 0 && await zpayBtn.first().isVisible().catch(() => false)) {
     await zpayBtn.first().click();
     log("Clicked 'Pay Now' Zpayments button.");
@@ -473,7 +474,7 @@ export async function getOrders(page: Page, limit: number): Promise<Array<Record
   await page.waitForTimeout(3000);
 
   const orders: Array<Record<string, unknown>> = [];
-  const orderCards = page.locator("div[class*='OrderCard'], div[class*='order-card']");
+  const orderCards = page.locator(SELECTORS.ORDER_CARD);
   const orderCount = Math.min(await orderCards.count(), limit);
 
   for (let i = 0; i < orderCount; i++) {
@@ -506,7 +507,7 @@ export async function trackOrder(page: Page, orderId?: string): Promise<Record<s
 
   if (!orderId) {
     try {
-      await page.locator("div[class*='OrderCard'], div[class*='order-card']").first().click();
+      await page.locator(SELECTORS.ORDER_CARD).first().click();
       await page.waitForTimeout(2000);
     } catch {
       throw new Error("No orders found");

@@ -1,6 +1,7 @@
 import type { Page } from "playwright";
 import { isStoreClosed, extractPrice } from "./helpers.ts";
 import { getKnownProducts, reSearchProduct } from "./search-flow.ts";
+import { SELECTORS, productById } from "./selectors.ts";
 
 function log(msg: string): void {
   process.stderr.write(`[playwright] ${msg}\n`);
@@ -22,7 +23,7 @@ export async function addToCart(
   }
 
   // Target the specific product card by its ID attribute
-  let card = page.locator(`div[id='${productId}']`);
+  let card = page.locator(productById(productId));
 
   if (await card.count() === 0) {
     log(`Product ${productId} not found on current page.`);
@@ -35,7 +36,7 @@ export async function addToCart(
       await reSearchProduct(page, known.sourceQuery);
 
       // Re-locate the card after search
-      card = page.locator(`div[id='${productId}']`);
+      card = page.locator(productById(productId));
       if (await card.count() === 0) {
         log(`CRITICAL: Product ${productId} still not found after re-search.`);
         throw new Error(`Product ${productId} not found after re-search`);
@@ -48,7 +49,7 @@ export async function addToCart(
 
   // Check if item is already in cart (quantity controls visible instead of ADD)
   const addBtn = card.locator("div").filter({ hasText: "ADD" }).last();
-  const alreadyInCart = await card.locator(".icon-plus, .icon-minus").count() > 0;
+  const alreadyInCart = await card.locator(SELECTORS.ICON_PLUS_MINUS).count() > 0;
   let itemsToAdd = quantity;
   let actualAdded = 0;
 
@@ -70,7 +71,7 @@ export async function addToCart(
     if (!alreadyInCart) await page.waitForTimeout(500);
 
     // Find the + button — click the icon element directly (not parent)
-    const plusIcon = card.locator(".icon-plus").first();
+    const plusIcon = card.locator(SELECTORS.ICON_PLUS).first();
     if (await plusIcon.count() === 0) {
       // Fallback: try text-based + button
       const plusText = card.locator("button, div, span").filter({ hasText: /^\+$/ }).first();
@@ -117,7 +118,7 @@ export async function addToCart(
   await page.waitForTimeout(1000);
 
   // Check for store unavailable modal after adding
-  if (await page.isVisible("text=\"Sorry, can't take your order\"").catch(() => false)) {
+  if (await page.isVisible(SELECTORS.STORE_UNAVAILABLE_MODAL).catch(() => false)) {
     throw new Error("WARNING: Store is unavailable (modal detected after add).");
   }
 
@@ -144,7 +145,7 @@ export async function getCart(page: Page): Promise<{
   const emptyResult = { items: [] as any[], subtotal: 0, delivery_fee: 0, handling_fee: 0, total: 0, item_count: 0 };
 
   // Click the cart button to open the cart drawer
-  const cartBtn = page.locator("div[class*='CartButton__Button'], div[class*='CartButton__Container']");
+  const cartBtn = page.locator(SELECTORS.CART_BUTTON);
   if (await cartBtn.count() > 0) {
     await cartBtn.first().click();
     await page.waitForTimeout(2000);
@@ -160,9 +161,9 @@ export async function getCart(page: Page): Promise<{
 
   // 2. Check for cart activity indicators
   const isCartActive =
-    await page.isVisible("text=/Bill details/i").catch(() => false) ||
-    await page.isVisible("button:has-text('Proceed')").catch(() => false) ||
-    await page.isVisible("text='ordering for'").catch(() => false);
+    await page.isVisible(SELECTORS.BILL_DETAILS_REGEX).catch(() => false) ||
+    await page.isVisible(SELECTORS.PROCEED_HAS_TEXT).catch(() => false) ||
+    await page.isVisible(SELECTORS.ORDERING_FOR).catch(() => false);
 
   if (!isCartActive) {
     return { ...emptyResult, warning: "Cart seems empty or store is unavailable." };
@@ -170,16 +171,16 @@ export async function getCart(page: Page): Promise<{
 
   // 3. Parse individual cart items from CartProduct elements
   const items: Array<{ name: string; variant: string; unit_price: number; quantity: number; total_price: number; image_url?: string }> = [];
-  const cartProducts = page.locator("div[class*='CartProduct']");
+  const cartProducts = page.locator(SELECTORS.CART_PRODUCT);
   const productCount = await cartProducts.count();
   log(`Found ${productCount} items in cart drawer.`);
 
   for (let i = 0; i < productCount; i++) {
     try {
       const card = cartProducts.nth(i);
-      const name = await card.locator("div[class*='ProductTitle']").first().innerText().catch(() => "Unknown");
-      const variant = await card.locator("div[class*='ProductVariant']").first().innerText().catch(() => "");
-      const priceText = await card.locator("div[class*='Price-']").first().innerText().catch(() => "0");
+      const name = await card.locator(SELECTORS.CART_PRODUCT_TITLE).first().innerText().catch(() => "Unknown");
+      const variant = await card.locator(SELECTORS.CART_PRODUCT_VARIANT).first().innerText().catch(() => "");
+      const priceText = await card.locator(SELECTORS.CART_PRODUCT_PRICE).first().innerText().catch(() => "0");
       const unitPrice = extractPrice(priceText);
       const image_url = await card.locator("img").first().getAttribute("src").catch(() => undefined) ?? undefined;
 
@@ -217,7 +218,7 @@ export async function getCart(page: Page): Promise<{
   let handlingFee = 0;
   let total = 0;
 
-  const billElements = page.locator("div[class*='Bill']");
+  const billElements = page.locator(SELECTORS.CART_BILL);
   const billTexts = await billElements.allInnerTexts().catch(() => []);
   // Find the full bill details text (contains "Items total" and "Grand total")
   const billText = billTexts.find(t => t.includes("Items total") && t.includes("Grand total")) || "";
@@ -260,7 +261,7 @@ export async function updateCartItem(
   productId: string,
   quantity: number
 ): Promise<{ success: boolean; new_quantity: number }> {
-  const card = page.locator(`div[id='${productId}']`);
+  const card = page.locator(productById(productId));
 
   if (await card.count() === 0) {
     throw new Error(`Product ${productId} not found on page`);
@@ -269,7 +270,7 @@ export async function updateCartItem(
   if (quantity === 0) {
     // Remove: click minus until ADD reappears
     while (true) {
-      const minusBtn = card.locator(".icon-minus").first();
+      const minusBtn = card.locator(SELECTORS.ICON_MINUS).first();
       if (await minusBtn.count() === 0) break;
       await minusBtn.locator("..").click();
       await page.waitForTimeout(500);
@@ -292,7 +293,7 @@ export async function removeFromCart(
   productId: string,
   quantity: number
 ): Promise<{ success: boolean }> {
-  let card = page.locator(`div[id='${productId}']`);
+  let card = page.locator(productById(productId));
 
   if (await card.count() === 0) {
     // Attempt recovery via known products re-search
@@ -300,7 +301,7 @@ export async function removeFromCart(
     const known = knownProducts.get(productId);
     if (known?.sourceQuery) {
       await reSearchProduct(page, known.sourceQuery);
-      card = page.locator(`div[id='${productId}']`);
+      card = page.locator(productById(productId));
       if (await card.count() === 0) {
         throw new Error(`Product ${productId} not found after recovery search.`);
       }
@@ -310,7 +311,7 @@ export async function removeFromCart(
   }
 
   // Find the minus button
-  const minusBtn = card.locator(".icon-minus").first();
+  const minusBtn = card.locator(SELECTORS.ICON_MINUS).first();
   let minusClickable;
   if (await minusBtn.count() > 0) {
     minusClickable = minusBtn.locator("..");
@@ -340,7 +341,7 @@ export async function removeFromCart(
  * Clear entire cart by clicking minus on all items in the cart drawer.
  */
 export async function clearCart(page: Page): Promise<{ success: boolean; items_cleared: number }> {
-  const cartBtn = page.locator("div[class*='CartButton__Button'], div[class*='CartButton__Container']");
+  const cartBtn = page.locator(SELECTORS.CART_BUTTON);
   if (await cartBtn.count() > 0) {
     await cartBtn.first().click();
     await page.waitForTimeout(2000);
@@ -348,7 +349,7 @@ export async function clearCart(page: Page): Promise<{ success: boolean; items_c
 
   let removed = 0;
   while (true) {
-    const minusBtns = page.locator(".icon-minus");
+    const minusBtns = page.locator(SELECTORS.ICON_MINUS);
     const btnCount = await minusBtns.count();
     if (btnCount === 0) break;
     await minusBtns.first().locator("..").click();

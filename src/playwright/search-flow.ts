@@ -1,5 +1,6 @@
 import type { Page } from "playwright";
 import { debugStep, extractPrice } from "./helpers.ts";
+import { SELECTORS } from "./selectors.ts";
 import type { Product } from "../types.ts";
 
 function log(msg: string): void {
@@ -25,15 +26,15 @@ export async function reSearchProduct(page: Page, sourceQuery: string): Promise<
   log(`Re-searching for products from query: "${sourceQuery}"`);
 
   // Activate search
-  if (await page.isVisible("a[href='/s/']")) {
-    await page.click("a[href='/s/']");
-  } else if (await page.isVisible("div[class*='SearchBar__PlaceholderContainer']")) {
-    await page.click("div[class*='SearchBar__PlaceholderContainer']");
-  } else if (await page.isVisible("input[placeholder*='Search']")) {
-    await page.click("input[placeholder*='Search']");
+  if (await page.isVisible(SELECTORS.SEARCH_LINK)) {
+    await page.click(SELECTORS.SEARCH_LINK);
+  } else if (await page.isVisible(SELECTORS.SEARCH_PLACEHOLDER)) {
+    await page.click(SELECTORS.SEARCH_PLACEHOLDER);
+  } else if (await page.isVisible(SELECTORS.SEARCH_INPUT_PLACEHOLDER)) {
+    await page.click(SELECTORS.SEARCH_INPUT_PLACEHOLDER);
   } else {
     try {
-      await page.click("text='Search'", { timeout: 3000 });
+      await page.click(SELECTORS.SEARCH_TEXT, { timeout: 3000 });
     } catch {
       await page.goto(`https://blinkit.com/s/?q=${encodeURIComponent(sourceQuery)}`, {
         waitUntil: "domcontentloaded",
@@ -46,7 +47,7 @@ export async function reSearchProduct(page: Page, sourceQuery: string): Promise<
 
   try {
     const searchInput = await page.waitForSelector(
-      "input[placeholder*='Search'], input[type='text']",
+      SELECTORS.SEARCH_INPUT,
       { state: "visible", timeout: 15000 }
     );
     if (searchInput) {
@@ -60,7 +61,7 @@ export async function reSearchProduct(page: Page, sourceQuery: string): Promise<
 
   // Wait for results
   try {
-    await page.waitForSelector("div[role='button']:has-text('ADD')", { timeout: 30000 });
+    await page.waitForSelector(SELECTORS.PRODUCT_CARD_ADD, { timeout: 30000 });
   } catch {
     log("No product cards found during re-search");
   }
@@ -186,8 +187,8 @@ function parseApiProducts(apiData: any, lim: number): Array<Record<string, unkno
 
 // ── Helper: check for "no results" state on page ──
 async function checkNoResults(page: Page): Promise<boolean> {
-  return (await page.isVisible("text='No results found'").catch(() => false)) ||
-         (await page.isVisible("text=/no results/i").catch(() => false));
+  return (await page.isVisible(SELECTORS.NO_RESULTS_FOUND).catch(() => false)) ||
+         (await page.isVisible(SELECTORS.NO_RESULTS_REGEX).catch(() => false));
 }
 
 // ── Helper: update known products map from DOM-parsed results ──
@@ -257,7 +258,7 @@ export async function searchProducts(
     if (products.length === 0) {
       log("API interception missed, trying batch DOM parse on direct URL page");
       try {
-        await page.waitForSelector("div[role='button']:has-text('ADD')", { timeout: 10000 });
+        await page.waitForSelector(SELECTORS.PRODUCT_CARD_ADD, { timeout: 10000 });
         products = await batchParseCards(page, limit);
         updateKnownProducts(products);
         if (products.length > 0) {
@@ -291,19 +292,19 @@ export async function searchProducts(
 
       // Activate search bar
       await debugStep(page, "Activating search bar (fallback)");
-      if (await page.isVisible("a[href='/s/']")) {
-        await page.click("a[href='/s/']");
-      } else if (await page.isVisible("div[class*='SearchBar__PlaceholderContainer']")) {
-        await page.click("div[class*='SearchBar__PlaceholderContainer']");
-      } else if (await page.isVisible("input[placeholder*='Search']")) {
-        await page.click("input[placeholder*='Search']");
+      if (await page.isVisible(SELECTORS.SEARCH_LINK)) {
+        await page.click(SELECTORS.SEARCH_LINK);
+      } else if (await page.isVisible(SELECTORS.SEARCH_PLACEHOLDER)) {
+        await page.click(SELECTORS.SEARCH_PLACEHOLDER);
+      } else if (await page.isVisible(SELECTORS.SEARCH_INPUT_PLACEHOLDER)) {
+        await page.click(SELECTORS.SEARCH_INPUT_PLACEHOLDER);
       } else {
-        await page.click("text='Search'", { timeout: 3000 });
+        await page.click(SELECTORS.SEARCH_TEXT, { timeout: 3000 });
       }
 
       // Type and submit
       const searchInput = await page.waitForSelector(
-        "input[placeholder*='Search'], input[type='text']",
+        SELECTORS.SEARCH_INPUT,
         { state: "visible", timeout: 30000 }
       );
       if (searchInput) {
@@ -314,7 +315,7 @@ export async function searchProducts(
 
       // Wait for results
       try {
-        await page.waitForSelector("div[role='button']:has-text('ADD')", { timeout: 30000 });
+        await page.waitForSelector(SELECTORS.PRODUCT_CARD_ADD, { timeout: 30000 });
       } catch {
         if (await checkNoResults(page)) {
           log("No results found (fallback).");
@@ -348,13 +349,13 @@ export async function getProductDetails(page: Page, productId: string): Promise<
   });
   await page.waitForTimeout(2000);
 
-  const name = await page.locator("h1, [class*='ProductName']").first().textContent().catch(() => null);
-  const priceText = await page.locator("[class*='Price'], [class*='price']").first().textContent().catch(() => null);
-  const description = await page.locator("[class*='Description'], [class*='description']").first().textContent().catch(() => null);
-  const brand = await page.locator("[class*='Brand'], [class*='brand']").first().textContent().catch(() => null);
+  const name = await page.locator(SELECTORS.PRODUCT_DETAIL_NAME).first().textContent().catch(() => null);
+  const priceText = await page.locator(SELECTORS.PRODUCT_DETAIL_PRICE).first().textContent().catch(() => null);
+  const description = await page.locator(SELECTORS.PRODUCT_DETAIL_DESCRIPTION).first().textContent().catch(() => null);
+  const brand = await page.locator(SELECTORS.PRODUCT_DETAIL_BRAND).first().textContent().catch(() => null);
 
   const images: string[] = [];
-  const imgs = page.locator("img[class*='product'], img[class*='Product']");
+  const imgs = page.locator(SELECTORS.PRODUCT_IMAGE);
   const imgCount = await imgs.count();
   for (let j = 0; j < imgCount; j++) {
     const src = await imgs.nth(j).getAttribute("src").catch(() => null);
@@ -381,7 +382,7 @@ export async function browseCategories(page: Page): Promise<Array<{ id: string; 
   await page.waitForTimeout(2000);
 
   const categories: Array<{ id: string; name: string; icon_url?: string }> = [];
-  const categoryLinks = page.locator("a[href*='/cn/']");
+  const categoryLinks = page.locator(SELECTORS.CATEGORY_LINK);
   const catCount = await categoryLinks.count();
 
   for (let i = 0; i < catCount; i++) {
@@ -421,13 +422,13 @@ export async function browseCategoryProducts(
   await page.waitForTimeout(2000);
 
   try {
-    await page.waitForSelector("div[role='button']:has-text('ADD')", { timeout: 15000 });
+    await page.waitForSelector(SELECTORS.PRODUCT_CARD_ADD, { timeout: 15000 });
   } catch {
     // No products found
   }
 
   const products: Array<Record<string, unknown>> = [];
-  const cards = page.locator("div[role='button']").filter({ hasText: "ADD" }).filter({ hasText: "\u20B9" });
+  const cards = page.locator(SELECTORS.PRODUCT_CARD_ADD).filter({ hasText: "\u20B9" });
   const cardCount = Math.min(await cards.count(), limit);
 
   for (let i = 0; i < cardCount; i++) {
@@ -436,7 +437,7 @@ export async function browseCategoryProducts(
       const textContent = await card.innerText();
       const productId = await card.getAttribute("id") ?? `product-${i}`;
 
-      const nameLocator = card.locator("div[class*='line-clamp']");
+      const nameLocator = card.locator(SELECTORS.CATEGORY_PRODUCT_NAME);
       let name = "Unknown";
       if (await nameLocator.count() > 0) {
         name = (await nameLocator.first().innerText()).trim();
