@@ -18,21 +18,23 @@ export interface ProductDetails extends Product {
 }
 
 export interface CartItem {
-  product_id: string;
   name: string;
+  variant: string;
   quantity: number;
   unit_price: number;
   total_price: number;
-  unit: string;
+  image_url?: string;
 }
 
 export interface Cart {
   items: CartItem[];
   subtotal: number;
   delivery_fee: number;
+  handling_fee: number;
   total: number;
   item_count: number;
   spending_warning?: string;
+  warning?: string;
 }
 
 export interface Address {

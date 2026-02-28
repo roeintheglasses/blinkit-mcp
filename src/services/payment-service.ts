@@ -30,6 +30,8 @@ export class PaymentService {
     message: string;
     action_needed?: string;
     qr_image_base64?: string;
+    qr_file_path?: string;
+    qr_text_art?: string;
   }> {
     const page = await this.ctx.browserManager.ensurePage();
     return selectPaymentMethodFlow(page, methodType);

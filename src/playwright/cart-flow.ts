@@ -133,27 +133,29 @@ export async function addToCart(
  * Get cart contents by opening the cart drawer.
  */
 export async function getCart(page: Page): Promise<{
-  items: any[];
+  items: Array<{ name: string; variant: string; unit_price: number; quantity: number; total_price: number; image_url?: string }>;
   subtotal: number;
   total: number;
   delivery_fee: number;
+  handling_fee: number;
   item_count: number;
-  raw_cart_text?: string;
   warning?: string;
 }> {
+  const emptyResult = { items: [] as any[], subtotal: 0, delivery_fee: 0, handling_fee: 0, total: 0, item_count: 0 };
+
   // Click the cart button to open the cart drawer
   const cartBtn = page.locator("div[class*='CartButton__Button'], div[class*='CartButton__Container']");
   if (await cartBtn.count() > 0) {
     await cartBtn.first().click();
     await page.waitForTimeout(2000);
   } else {
-    return { items: [], subtotal: 0, delivery_fee: 0, total: 0, item_count: 0, warning: "Cart button not found." };
+    return { ...emptyResult, warning: "Cart button not found." };
   }
 
   // 1. Critical availability check
   const storeStatus = await isStoreClosed(page);
   if (storeStatus) {
-    return { items: [], subtotal: 0, delivery_fee: 0, total: 0, item_count: 0, warning: `CRITICAL: ${storeStatus}` };
+    return { ...emptyResult, warning: `CRITICAL: ${storeStatus}` };
   }
 
   // 2. Check for cart activity indicators
@@ -162,37 +164,91 @@ export async function getCart(page: Page): Promise<{
     await page.isVisible("button:has-text('Proceed')").catch(() => false) ||
     await page.isVisible("text='ordering for'").catch(() => false);
 
-  // Scrape cart content from the drawer
-  const drawer = page.locator(
-    "div[class*='CartDrawer'], div[class*='CartSidebar'], div.cart-modal-rn, div[class*='CartWrapper__CartContainer']"
-  ).first();
+  if (!isCartActive) {
+    return { ...emptyResult, warning: "Cart seems empty or store is unavailable." };
+  }
 
-  let cartText = "";
-  if (await drawer.count() > 0) {
-    cartText = await drawer.innerText().catch(() => "");
-    if (cartText.includes("Currently unavailable") || cartText.includes("can't take your order")) {
-      return { items: [], subtotal: 0, delivery_fee: 0, total: 0, item_count: 0, warning: "CRITICAL: Store is unavailable (detected in cart)." };
+  // 3. Parse individual cart items from CartProduct elements
+  const items: Array<{ name: string; variant: string; unit_price: number; quantity: number; total_price: number; image_url?: string }> = [];
+  const cartProducts = page.locator("div[class*='CartProduct']");
+  const productCount = await cartProducts.count();
+  log(`Found ${productCount} items in cart drawer.`);
+
+  for (let i = 0; i < productCount; i++) {
+    try {
+      const card = cartProducts.nth(i);
+      const name = await card.locator("div[class*='ProductTitle']").first().innerText().catch(() => "Unknown");
+      const variant = await card.locator("div[class*='ProductVariant']").first().innerText().catch(() => "");
+      const priceText = await card.locator("div[class*='Price-']").first().innerText().catch(() => "0");
+      const unitPrice = extractPrice(priceText);
+      const image_url = await card.locator("img").first().getAttribute("src").catch(() => undefined) ?? undefined;
+
+      // Quantity is a raw text node between minus/plus button wrappers inside AddToCardContainer.
+      // Text lines of the item: [name, variant, price, minusIcon, QUANTITY, plusIcon]
+      let quantity = 1;
+      const fullText = await card.innerText().catch(() => "");
+      const lines = fullText.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+      // Find the standalone number(s) after the price — the first one is the quantity
+      let foundPrice = false;
+      for (const line of lines) {
+        if (line.includes("₹")) { foundPrice = true; continue; }
+        if (foundPrice && /^\d+$/.test(line)) {
+          quantity = parseInt(line, 10);
+          break;
+        }
+      }
+
+      items.push({
+        name,
+        variant,
+        unit_price: unitPrice,
+        quantity,
+        total_price: unitPrice * quantity,
+        image_url,
+      });
+    } catch (e) {
+      log(`Failed to parse cart item ${i}: ${e}`);
     }
   }
 
-  if (!isCartActive && !cartText.includes("\u20B9")) {
-    return { items: [], subtotal: 0, delivery_fee: 0, total: 0, item_count: 0, warning: "Cart seems empty or store is unavailable." };
+  // 4. Parse bill details
+  let subtotal = 0;
+  let deliveryFee = 0;
+  let handlingFee = 0;
+  let total = 0;
+
+  const billElements = page.locator("div[class*='Bill']");
+  const billTexts = await billElements.allInnerTexts().catch(() => []);
+  // Find the full bill details text (contains "Items total" and "Grand total")
+  const billText = billTexts.find(t => t.includes("Items total") && t.includes("Grand total")) || "";
+
+  if (billText) {
+    const itemsTotalMatch = billText.match(/Items total[^\d₹]*[₹]?\s*([\d,.]+)/i);
+    if (itemsTotalMatch) subtotal = extractPrice(itemsTotalMatch[1]);
+
+    const deliveryMatch = billText.match(/Delivery charge[^\d₹]*[₹]?\s*([\d,.]+)/i);
+    if (deliveryMatch) deliveryFee = extractPrice(deliveryMatch[1]);
+
+    const handlingMatch = billText.match(/Handling charge[^\d₹]*[₹]?\s*([\d,.]+)/i);
+    if (handlingMatch) handlingFee = extractPrice(handlingMatch[1]);
+
+    const totalMatch = billText.match(/Grand total[^\d₹]*[₹]?\s*([\d,.]+)/i);
+    if (totalMatch) total = extractPrice(totalMatch[1]);
   }
 
-  // Parse total from cart text
-  let total = 0;
-  const totalMatch = cartText.match(/(?:Grand Total|Total|To Pay)[^\d\u20B9]*[\u20B9]?\s*([\d,.]+)/i);
-  if (totalMatch) {
-    total = extractPrice(totalMatch[1]);
+  // Fallback: compute subtotal from items if bill parsing failed
+  if (subtotal === 0 && items.length > 0) {
+    subtotal = items.reduce((sum, item) => sum + item.total_price, 0);
   }
+  if (total === 0) total = subtotal + deliveryFee + handlingFee;
 
   return {
-    items: [],
-    subtotal: total,
-    delivery_fee: 0,
+    items,
+    subtotal,
+    delivery_fee: deliveryFee,
+    handling_fee: handlingFee,
     total,
-    item_count: 0,
-    raw_cart_text: cartText,
+    item_count: items.length,
   };
 }
 

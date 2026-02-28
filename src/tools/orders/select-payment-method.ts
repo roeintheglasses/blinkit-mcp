@@ -4,7 +4,7 @@ import { PaymentService } from "../../services/payment-service.ts";
 
 export const selectPaymentMethodTool = {
   name: "select_payment_method",
-  description: "Select a payment method on the checkout page. Types: 'card' (credit/debit), 'upi' (QR code), 'netbanking', 'wallets', 'pay_later'. For UPI, this generates a QR code image for the user to scan. For card, it shows the saved card with CVV input.",
+  description: "Select a payment method on the checkout page. Types: 'card' (credit/debit), 'upi' (QR code), 'netbanking', 'wallets', 'pay_later'. For UPI, this generates a QR code image saved locally and returned as an image. For card, it shows the saved card with CVV input.",
   inputSchema: {
     method_type: z.string().min(1).describe("Payment method type: 'card', 'upi', 'netbanking', 'wallets', 'cod', or 'pay_later'"),
   },
@@ -26,14 +26,24 @@ export const selectPaymentMethodTool = {
 
     const content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = [];
 
-    // Include QR code image if available (for UPI payments)
+    // Include QR code image if available (for clients that support images)
     if (result.qr_image_base64) {
       content.push({
         type: "image" as const,
         data: result.qr_image_base64,
         mimeType: "image/png",
       });
-      text += "\n\nQR code image is attached above. Share it with the user to scan.";
+    }
+
+    // Include Unicode text art QR code (works in ALL clients including Claude Desktop)
+    if (result.qr_text_art) {
+      text += "\n\nScan this QR code with any UPI app:\n\n";
+      text += "```\n" + result.qr_text_art + "```";
+    }
+
+    // Include file path as fallback
+    if (result.qr_file_path) {
+      text += `\n\nQR code also saved to: ${result.qr_file_path}`;
     }
 
     content.push({ type: "text" as const, text });

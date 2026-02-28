@@ -22,8 +22,10 @@ export class CartService {
       items: data.items,
       subtotal: data.subtotal,
       delivery_fee: data.delivery_fee,
+      handling_fee: data.handling_fee,
       total: data.total,
-      item_count: data.items.length,
+      item_count: data.item_count,
+      warning: data.warning,
     };
 
     // Check spending
