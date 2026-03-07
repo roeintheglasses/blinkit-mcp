@@ -39,7 +39,6 @@ export default tseslint.config(
         "error",
         {
           prefer: "type-imports",
-          fixable: "code",
         },
       ],
 
