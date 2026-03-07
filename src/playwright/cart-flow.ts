@@ -143,9 +143,10 @@ export async function addToCart(
           const limitMsg = page.getByText("Sorry, you can't add more of this item");
           if (await limitMsg.isVisible({ timeout: 1000 }).catch(() => false)) {
             log(`Quantity limit reached for ${productId}.`);
+            const cart_total = await extractCartTotal(page);
             return {
               success: true,
-              cart_total: 0,
+              cart_total,
               item_name: productId,
               quantity_added: actualAdded,
             };
@@ -166,9 +167,12 @@ export async function addToCart(
     throw new Error("WARNING: Store is unavailable (modal detected after add).");
   }
 
+  // Extract actual cart total after adding items
+  const cart_total = await extractCartTotal(page);
+
   return {
     success: true,
-    cart_total: 0,
+    cart_total,
     item_name: productId,
     quantity_added: actualAdded > 0 ? actualAdded : quantity,
   };
