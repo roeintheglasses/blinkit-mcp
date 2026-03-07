@@ -78,13 +78,12 @@ export class CartService {
     quantity = 1
   ): Promise<{ success: boolean; removed_item: string; new_cart_total: number }> {
     const page = await this.ctx.browserManager.ensurePage();
-    await removeFromCartFlow(page, productId, quantity);
+    const result = await removeFromCartFlow(page, productId, quantity);
 
-    const cart = await this.getCart();
     return {
-      success: true,
+      success: result.success,
       removed_item: productId,
-      new_cart_total: cart.total,
+      new_cart_total: result.cart_total,
     };
   }
 
