@@ -8,6 +8,50 @@ function log(msg: string): void {
 }
 
 /**
+ * Extract cart total from visible cart button or bill details.
+ * Tries cart button first (faster), falls back to bill details if needed.
+ */
+export async function extractCartTotal(page: Page): Promise<number> {
+  // Try cart button first - it usually shows total like "₹199" or similar
+  try {
+    const cartBtn = page.locator(SELECTORS.CART_BUTTON);
+    if (await cartBtn.count() > 0) {
+      const btnText = await cartBtn.first().innerText().catch(() => "");
+      if (btnText) {
+        const total = extractPrice(btnText);
+        if (total > 0) {
+          return total;
+        }
+      }
+    }
+  } catch {
+    // Fall through to bill details
+  }
+
+  // Fall back to bill details (requires cart to be open)
+  try {
+    const billElements = page.locator(SELECTORS.CART_BILL);
+    const billTexts = await billElements.allInnerTexts().catch(() => []);
+    // Find the full bill details text (contains "Grand total")
+    const billText = billTexts.find(t => t.includes("Grand total")) || "";
+
+    if (billText) {
+      const totalMatch = billText.match(/Grand total[^\d₹]*[₹]?\s*([\d,.]+)/i);
+      if (totalMatch) {
+        const total = extractPrice(totalMatch[1]);
+        if (total > 0) {
+          return total;
+        }
+      }
+    }
+  } catch {
+    // Ignore
+  }
+
+  return 0;
+}
+
+/**
  * Add a product to cart by its product ID on the current page.
  * Uses known products map for cross-search recovery if product is not visible.
  */
