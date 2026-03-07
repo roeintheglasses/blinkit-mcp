@@ -340,7 +340,7 @@ export async function removeFromCart(
   page: Page,
   productId: string,
   quantity: number
-): Promise<{ success: boolean }> {
+): Promise<{ success: boolean; cart_total: number }> {
   let card = page.locator(productById(productId));
 
   if (await card.count() === 0) {
@@ -379,7 +379,13 @@ export async function removeFromCart(
         break;
       }
     }
-    return { success: true };
+
+    await page.waitForTimeout(1000);
+
+    // Extract actual cart total after removing items
+    const cart_total = await extractCartTotal(page);
+
+    return { success: true, cart_total };
   } else {
     throw new Error(`Item ${productId} is not in cart (no '-' button found).`);
   }
