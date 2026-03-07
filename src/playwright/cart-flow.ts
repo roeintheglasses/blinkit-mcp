@@ -59,6 +59,14 @@ export async function extractCartTotal(page: Page): Promise<number> {
 /**
  * Add a product to cart by its product ID on the current page.
  * Uses known products map for cross-search recovery if product is not visible.
+ *
+ * @param page - Playwright page instance
+ * @param productId - Product ID to add to cart
+ * @param quantity - Quantity to add
+ * @returns Object containing success status, cart_total (extracted without opening cart drawer),
+ *          item_name, and quantity_added. The cart_total optimization eliminates redundant
+ *          getCart() calls in CartService.
+ * @throws Error if store is closed, product not found, or unavailable
  */
 export async function addToCart(
   page: Page,
@@ -308,6 +316,13 @@ export async function getCart(page: Page): Promise<{
 
 /**
  * Update a cart item's quantity on the current page.
+ *
+ * @param page - Playwright page instance
+ * @param productId - Product ID to update
+ * @param quantity - New quantity (0 to remove item)
+ * @returns Object containing success status, new_quantity, and cart_total (extracted without
+ *          opening cart drawer). The cart_total optimization eliminates redundant getCart() calls.
+ * @throws Error if product not found on page
  */
 export async function updateCartItem(
   page: Page,
@@ -344,6 +359,13 @@ export async function updateCartItem(
 /**
  * Remove items from cart by decrementing quantity.
  * Uses known products for re-search recovery if not on page.
+ *
+ * @param page - Playwright page instance
+ * @param productId - Product ID to remove from cart
+ * @param quantity - Quantity to remove (decrements)
+ * @returns Object containing success status and cart_total (extracted without opening cart drawer).
+ *          The cart_total optimization eliminates redundant getCart() calls in CartService.
+ * @throws Error if product not found or not in cart
  */
 export async function removeFromCart(
   page: Page,
