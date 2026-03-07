@@ -66,10 +66,19 @@ export class CartService {
   async updateCartItem(
     productId: string,
     quantity: number
-  ): Promise<Cart> {
+  ): Promise<{ success: boolean; new_quantity: number; cart_total: number; spending_warning?: string }> {
     const page = await this.ctx.browserManager.ensurePage();
-    await updateCartItemFlow(page, productId, quantity);
-    return this.getCart();
+    const result = await updateCartItemFlow(page, productId, quantity);
+
+    // Check spending using the cart total from the flow result
+    const spendingCheck = this.ctx.spendingGuard.check(result.cart_total);
+
+    return {
+      success: result.success,
+      new_quantity: result.new_quantity,
+      cart_total: result.cart_total,
+      spending_warning: spendingCheck.warning,
+    };
   }
 
   async removeFromCart(
