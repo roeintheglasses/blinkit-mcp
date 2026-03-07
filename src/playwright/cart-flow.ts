@@ -308,7 +308,7 @@ export async function updateCartItem(
   page: Page,
   productId: string,
   quantity: number
-): Promise<{ success: boolean; new_quantity: number }> {
+): Promise<{ success: boolean; new_quantity: number; cart_total: number }> {
   const card = page.locator(productById(productId));
 
   if (await card.count() === 0) {
@@ -326,10 +326,12 @@ export async function updateCartItem(
         break;
       }
     }
-    return { success: true, new_quantity: 0 };
+    const cart_total = await extractCartTotal(page);
+    return { success: true, new_quantity: 0, cart_total };
   }
 
-  return { success: true, new_quantity: quantity };
+  const cart_total = await extractCartTotal(page);
+  return { success: true, new_quantity: quantity, cart_total };
 }
 
 /**
