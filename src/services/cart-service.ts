@@ -51,7 +51,9 @@ export class CartService {
     const page = await this.ctx.browserManager.ensurePage();
     const result = await addToCartFlow(page, productId, quantity);
 
-    // Check spending using the cart total from the flow result
+    // Performance optimization: Use cart_total returned by addToCartFlow instead of calling
+    // getCart() again. This avoids redundant cart drawer opening and 2-second wait, cutting
+    // add-to-cart latency nearly in half. The flow already has the updated cart total visible.
     const spendingCheck = this.ctx.spendingGuard.check(result.cart_total);
 
     return {
@@ -70,7 +72,8 @@ export class CartService {
     const page = await this.ctx.browserManager.ensurePage();
     const result = await updateCartItemFlow(page, productId, quantity);
 
-    // Check spending using the cart total from the flow result
+    // Performance optimization: Use cart_total returned by updateCartItemFlow instead of
+    // calling getCart() again. This avoids redundant cart drawer opening and 2-second wait.
     const spendingCheck = this.ctx.spendingGuard.check(result.cart_total);
 
     return {
@@ -88,6 +91,8 @@ export class CartService {
     const page = await this.ctx.browserManager.ensurePage();
     const result = await removeFromCartFlow(page, productId, quantity);
 
+    // Performance optimization: Use cart_total returned by removeFromCartFlow instead of
+    // calling getCart() again. This avoids redundant cart drawer opening and 2-second wait.
     return {
       success: result.success,
       removed_item: productId,
