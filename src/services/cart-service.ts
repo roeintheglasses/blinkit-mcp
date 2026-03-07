@@ -51,13 +51,12 @@ export class CartService {
     const page = await this.ctx.browserManager.ensurePage();
     const result = await addToCartFlow(page, productId, quantity);
 
-    // Get updated cart to check spending
-    const cart = await this.getCart();
-    const spendingCheck = this.ctx.spendingGuard.check(cart.total);
+    // Check spending using the cart total from the flow result
+    const spendingCheck = this.ctx.spendingGuard.check(result.cart_total);
 
     return {
       success: result.success,
-      cart_total: cart.total,
+      cart_total: result.cart_total,
       item_name: result.item_name,
       quantity_added: result.quantity_added,
       spending_warning: spendingCheck.warning,
