@@ -9,6 +9,9 @@ export const ConfigSchema = z.object({
   debug: z.boolean().default(false),
   slow_mo: z.number().min(0).default(0),
   screenshot_on_error: z.boolean().default(true),
+  max_retries: z.number().min(0).default(3),
+  backoff_multiplier: z.number().positive().default(2),
+  circuit_breaker_threshold: z.number().positive().default(5),
 });
 
 export type BlinkitConfig = z.infer<typeof ConfigSchema>;
