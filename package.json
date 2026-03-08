@@ -12,7 +12,10 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "keywords": [
     "mcp",
@@ -23,11 +26,15 @@
   ],
   "license": "MIT",
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^25.3.0",
     "@types/pngjs": "^6.0.5",
     "@types/qrcode": "^1.5.6",
+    "eslint": "^10.0.3",
+    "prettier": "^3.8.1",
     "tsx": "^4.21.0",
     "typescript": "^5.8.0",
+    "typescript-eslint": "^8.56.1",
     "vitest": "^3.0.0"
   },
   "peerDependencies": {

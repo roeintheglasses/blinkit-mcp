@@ -1,4 +1,4 @@
-# dependencies (bun install)
+# dependencies
 node_modules
 
 # output
@@ -12,8 +12,13 @@ coverage
 
 # logs
 logs
-_.log
-report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+*.log
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# caches
+.eslintcache
+.cache
+*.tsbuildinfo
 
 # dotenv environment variable files
 .env
@@ -22,16 +27,11 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .env.production.local
 .env.local
 
-# caches
-.eslintcache
-.cache
-*.tsbuildinfo
-
-# IntelliJ based IDEs
-.idea
-
-# Finder (MacOS) folder config
-.DS_Store
-
 # Auto Claude data directory
 .auto-claude/
+
+# package manager lock files
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+bun.lockb
