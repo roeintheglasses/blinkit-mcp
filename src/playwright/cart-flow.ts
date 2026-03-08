@@ -1,5 +1,5 @@
 import type { Page } from "playwright";
-import { isStoreClosed, extractPrice } from "./helpers.ts";
+import { isStoreClosed, extractPrice, waitForCartUpdate } from "./helpers.ts";
 import { getKnownProducts, reSearchProduct } from "./search-flow.ts";
 import { SELECTORS, productById } from "./selectors.ts";
 
@@ -120,12 +120,11 @@ export async function addToCart(
     log(`Clicked ADD for product ${productId} (1/${quantity}).`);
     itemsToAdd--;
     actualAdded++;
-    await page.waitForTimeout(800);
+    await page.waitForSelector(SELECTORS.ICON_PLUS_MINUS, { timeout: 5000 }).catch(() => null);
   }
 
   // Use increment button for remaining quantity (or all of it if already in cart)
   if (itemsToAdd > 0) {
-    if (!alreadyInCart) await page.waitForTimeout(500);
 
     // Find the + button — click the icon element directly (not parent)
     const plusIcon = card.locator(SELECTORS.ICON_PLUS).first();
@@ -142,7 +141,7 @@ export async function addToCart(
           await plusText.click();
           actualAdded++;
           log(`Incrementing via text + for ${productId} (${actualAdded}/${quantity}).`);
-          await page.waitForTimeout(500);
+          await waitForCartUpdate(page, 3000);
         }
       }
     } else {
@@ -168,12 +167,12 @@ export async function addToCart(
           // No limit message, continue
         }
 
-        await page.waitForTimeout(500);
+        await waitForCartUpdate(page, 3000);
       }
     }
   }
 
-  await page.waitForTimeout(1000);
+  await waitForCartUpdate(page, 3000);
 
   // Check for store unavailable modal after adding
   if (await page.isVisible(SELECTORS.STORE_UNAVAILABLE_MODAL).catch(() => false)) {
