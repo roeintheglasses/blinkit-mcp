@@ -54,4 +54,30 @@ describe("ConfigSchema", () => {
     const config = ConfigSchema.parse({ debug: true });
     expect(config.debug).toBe(true);
   });
+
+  test("uses default retry parameters", () => {
+    const config = ConfigSchema.parse({});
+    expect(config.max_retries).toBe(3);
+    expect(config.backoff_multiplier).toBe(2);
+    expect(config.circuit_breaker_threshold).toBe(5);
+  });
+
+  test("accepts custom retry parameters", () => {
+    const config = ConfigSchema.parse({
+      max_retries: 5,
+      backoff_multiplier: 3,
+      circuit_breaker_threshold: 10,
+    });
+    expect(config.max_retries).toBe(5);
+    expect(config.backoff_multiplier).toBe(3);
+    expect(config.circuit_breaker_threshold).toBe(10);
+  });
+
+  test("rejects invalid retry parameters", () => {
+    expect(() => ConfigSchema.parse({ max_retries: -1 })).toThrow();
+    expect(() => ConfigSchema.parse({ backoff_multiplier: 0 })).toThrow();
+    expect(() => ConfigSchema.parse({ backoff_multiplier: -1 })).toThrow();
+    expect(() => ConfigSchema.parse({ circuit_breaker_threshold: 0 })).toThrow();
+    expect(() => ConfigSchema.parse({ circuit_breaker_threshold: -1 })).toThrow();
+  });
 });

@@ -45,7 +45,7 @@ async function main() {
   }
 
   const rateLimiter = new RateLimiter();
-  const httpClient = new BlinkitHttpClient(rateLimiter, logger);
+  const httpClient = new BlinkitHttpClient(rateLimiter, logger, config);
   const browserManager = new BrowserManager(logger, config);
   browserManager.setSessionManager(sessionManager);
   const spendingGuard = new SpendingGuard(config);

@@ -30,6 +30,12 @@ function loadEnvOverrides(): Record<string, unknown> {
   if (env.BLINKIT_DEBUG) overrides.debug = env.BLINKIT_DEBUG === "true";
   if (env.BLINKIT_SLOW_MO) overrides.slow_mo = Number(env.BLINKIT_SLOW_MO);
   if (env.BLINKIT_SCREENSHOT_ON_ERROR) overrides.screenshot_on_error = env.BLINKIT_SCREENSHOT_ON_ERROR !== "false";
+
+  // Retry parameters
+  if (env.BLINKIT_MAX_RETRIES) overrides.max_retries = Number(env.BLINKIT_MAX_RETRIES);
+  if (env.BLINKIT_BACKOFF_MULTIPLIER) overrides.backoff_multiplier = Number(env.BLINKIT_BACKOFF_MULTIPLIER);
+  if (env.BLINKIT_CIRCUIT_BREAKER_THRESHOLD) overrides.circuit_breaker_threshold = Number(env.BLINKIT_CIRCUIT_BREAKER_THRESHOLD);
+
   return overrides;
 }
 

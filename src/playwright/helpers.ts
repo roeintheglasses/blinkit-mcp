@@ -228,22 +228,50 @@ export async function safeQueryAll(page: Page, selector: string): Promise<Array<
   return results;
 }
 
+export interface RetryOptions {
+  maxJitter?: number;
+  retryableErrors?: (error: unknown) => boolean;
+  onRetry?: (attempt: number, error: unknown, delay: number) => void;
+}
+
 export async function retry<T>(
   fn: () => Promise<T>,
   maxRetries = 3,
-  delayMs = 1000
+  delayMs = 1000,
+  options?: RetryOptions
 ): Promise<T> {
+  const { maxJitter = 500, retryableErrors, onRetry } = options ?? {};
   let lastError: Error | undefined;
-  for (let i = 0; i < maxRetries; i++) {
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      if (i < maxRetries - 1) {
-        await new Promise((r) => setTimeout(r, delayMs));
+
+      // Don't retry if this is the last attempt or error is not retryable
+      if (attempt >= maxRetries - 1) {
+        throw lastError;
       }
+
+      if (retryableErrors && !retryableErrors(error)) {
+        throw lastError;
+      }
+
+      // Calculate exponential backoff with jitter
+      // Formula: (baseDelay * 2^attempt) + random(0, maxJitter)
+      const exponentialDelay = delayMs * Math.pow(2, attempt);
+      const jitter = Math.random() * maxJitter;
+      const totalDelay = exponentialDelay + jitter;
+
+      if (onRetry) {
+        onRetry(attempt + 1, error, totalDelay);
+      }
+
+      await new Promise((r) => setTimeout(r, totalDelay));
     }
   }
+
   throw lastError;
 }
 
