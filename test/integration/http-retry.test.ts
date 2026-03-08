@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
 import { BlinkitHttpClient } from "../../src/core/http-client.ts";
 import { RateLimiter } from "../../src/core/rate-limiter.ts";
 import { Logger } from "../../src/core/logger.ts";
+import { ConfigSchema } from "../../src/config/schema.ts";
 
 describe("HTTP Client with Retry Integration", () => {
   let httpClient: BlinkitHttpClient;
@@ -11,7 +12,8 @@ describe("HTTP Client with Retry Integration", () => {
     // Create client with fast rate limiter for testing
     const rateLimiter = new RateLimiter(10, 100, 0); // high capacity, no min interval
     const logger = new Logger("error"); // suppress logs during tests
-    httpClient = new BlinkitHttpClient(rateLimiter, logger);
+    const config = ConfigSchema.parse({}); // Use default config values
+    httpClient = new BlinkitHttpClient(rateLimiter, logger, config);
 
     // Save original fetch
     originalFetch = global.fetch;

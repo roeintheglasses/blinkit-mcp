@@ -1,6 +1,7 @@
 import type { RateLimiter } from "./rate-limiter.ts";
 import type { Logger } from "./logger.ts";
 import { HttpCache } from "./http-cache.ts";
+import type { BlinkitConfig } from "../config/schema.ts";
 import { RetryManager, isRetryableHttpError } from "./retry-manager.ts";
 import { CircuitBreaker } from "./circuit-breaker.ts";
 import { TIMEOUTS, DEFAULT_HEADERS, RETRY_DEFAULTS } from "../constants.ts";
@@ -12,18 +13,18 @@ export class BlinkitHttpClient {
   private retryManager: RetryManager;
   private circuitBreaker: CircuitBreaker;
 
-  constructor(rateLimiter: RateLimiter, logger: Logger) {
+  constructor(rateLimiter: RateLimiter, logger: Logger, config: BlinkitConfig) {
     this.rateLimiter = rateLimiter;
     this.logger = logger;
     this.cache = new HttpCache();
     this.retryManager = new RetryManager({
-      maxRetries: RETRY_DEFAULTS.MAX_RETRIES,
+      maxRetries: config.max_retries,
       baseDelay: RETRY_DEFAULTS.INITIAL_BACKOFF_MS,
       maxJitter: RETRY_DEFAULTS.MAX_JITTER_MS,
       retryableErrors: isRetryableHttpError,
     });
     this.circuitBreaker = new CircuitBreaker("blinkit-http", {
-      failureThreshold: RETRY_DEFAULTS.CIRCUIT_BREAKER_THRESHOLD,
+      failureThreshold: config.circuit_breaker_threshold,
       resetTimeout: RETRY_DEFAULTS.CIRCUIT_BREAKER_RESET_MS,
     });
   }
@@ -122,7 +123,7 @@ export class BlinkitHttpClient {
         },
         (context) => {
           this.logger.warn(
-            `Retrying HTTP ${method} ${url} (attempt ${context.attempt}/${RETRY_DEFAULTS.MAX_RETRIES}) after ${context.nextDelay}ms delay. Error: ${context.lastError instanceof Error ? context.lastError.message : String(context.lastError)}`
+            `Retrying HTTP ${method} ${url} (attempt ${context.attempt}/${this.retryManager.getConfig().maxRetries}) after ${context.nextDelay}ms delay. Error: ${context.lastError instanceof Error ? context.lastError.message : String(context.lastError)}`
           );
         }
       );
