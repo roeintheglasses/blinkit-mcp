@@ -23,11 +23,10 @@ export async function getPaymentMethods(page: Page): Promise<{
   log("Getting available payment methods...");
 
   // Ensure we're on the checkout page with payment widget
-  let hasWidget = await page.locator(SELECTORS.PAYMENT_WIDGET).count() > 0;
+  const hasWidget = await page.locator(SELECTORS.PAYMENT_WIDGET).count() > 0;
   if (!hasWidget) {
     log("Payment widget not visible. Trying to navigate to it...");
-    const navResult = await navigateToPaymentWidget(page, 15000);
-    hasWidget = navResult.reached;
+    await navigateToPaymentWidget(page, 15000);
   }
 
   const frame = await getPaymentFrame(page);
@@ -57,7 +56,6 @@ export async function getPaymentMethods(page: Page): Promise<{
     const methodLocator = frame.locator(check.selector).first();
     if (await methodLocator.count().catch(() => 0) > 0) {
       let details: string | undefined;
-      const isAvailable = !frameText.includes(`${check.text}`) || true; // Present means available
 
       // Check for specific details
       if (check.type === "card") {

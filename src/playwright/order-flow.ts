@@ -1,10 +1,6 @@
 import type { Page } from "playwright";
 import { SELECTORS } from "./selectors.ts";
 
-function log(msg: string): void {
-  process.stderr.write(`[playwright] ${msg}\n`);
-}
-
 /**
  * Fetch recent orders from the orders page.
  * Returns basic order information extracted from order cards.
