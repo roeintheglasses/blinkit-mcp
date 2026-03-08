@@ -1,10 +1,7 @@
 import type { Page, BrowserContext } from "playwright";
 import { debugStep, checkLoggedIn } from "./helpers.ts";
 import { SELECTORS } from "./selectors.ts";
-
-function log(msg: string): void {
-  process.stderr.write(`[playwright] ${msg}\n`);
-}
+import { log } from "./log.ts";
 
 /**
  * Login flow: navigates to blinkit, clicks Login, fills phone number, clicks Continue.
