@@ -1,6 +1,9 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { PaymentService } from "../../src/services/payment-service.ts";
 import type { AppContext } from "../../src/types.ts";
+import type { Logger } from "../../src/core/logger.ts";
+import type { BrowserManager } from "../../src/core/browser-manager.ts";
+import type { SessionManager } from "../../src/core/session-manager.ts";
 import type { Page } from "playwright";
 
 // Mock the payment-flow module
@@ -37,16 +40,16 @@ describe("PaymentService", () => {
         debug: vi.fn(),
         warn: vi.fn(),
         error: vi.fn(),
-      },
+      } as unknown as Logger,
       browserManager: {
         ensurePage: vi.fn(async () => mockPage),
         isRunning: vi.fn(() => true),
         close: vi.fn(async () => {}),
-      },
+      } as unknown as BrowserManager,
       sessionManager: {
         isAuthenticated: vi.fn(() => true),
         getPhone: vi.fn(() => "1234567890"),
-      },
+      } as unknown as SessionManager,
       config: {} as any,
       httpClient: {} as any,
       rateLimiter: {} as any,
