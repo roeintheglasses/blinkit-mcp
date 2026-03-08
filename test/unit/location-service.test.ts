@@ -239,6 +239,9 @@ describe("LocationService", () => {
     test("selects address by index with hint", async () => {
       const mockHint = "Address at index 0 selected successfully";
       vi.mocked(selectAddressFlow).mockResolvedValue({
+        selected: true,
+        payment_ready: true,
+        skipped_steps: [],
         hint: mockHint,
       });
 
@@ -250,7 +253,12 @@ describe("LocationService", () => {
     });
 
     test("selects address by index without hint", async () => {
-      vi.mocked(selectAddressFlow).mockResolvedValue({});
+      vi.mocked(selectAddressFlow).mockResolvedValue({
+        selected: true,
+        payment_ready: false,
+        skipped_steps: [],
+        hint: "Address at index 2 selected",
+      });
 
       const result = await locationService.selectAddress(2);
 
@@ -261,6 +269,9 @@ describe("LocationService", () => {
 
     test("handles selecting first address (index 0)", async () => {
       vi.mocked(selectAddressFlow).mockResolvedValue({
+        selected: true,
+        payment_ready: true,
+        skipped_steps: [],
         hint: "Home address selected",
       });
 
@@ -279,7 +290,12 @@ describe("LocationService", () => {
 
       for (const { index, hint } of testCases) {
         vi.clearAllMocks();
-        vi.mocked(selectAddressFlow).mockResolvedValue({ hint });
+        vi.mocked(selectAddressFlow).mockResolvedValue({
+          selected: true,
+          payment_ready: true,
+          skipped_steps: [],
+          hint,
+        });
 
         const result = await locationService.selectAddress(index);
 
@@ -289,7 +305,12 @@ describe("LocationService", () => {
     });
 
     test("uses default message when no hint provided", async () => {
-      vi.mocked(selectAddressFlow).mockResolvedValue({});
+      vi.mocked(selectAddressFlow).mockResolvedValue({
+        selected: true,
+        payment_ready: false,
+        skipped_steps: [],
+        hint: "Address at index 3 selected",
+      });
 
       const result = await locationService.selectAddress(3);
 
@@ -297,7 +318,12 @@ describe("LocationService", () => {
     });
 
     test("ensures browser page before selecting address", async () => {
-      vi.mocked(selectAddressFlow).mockResolvedValue({});
+      vi.mocked(selectAddressFlow).mockResolvedValue({
+        selected: true,
+        payment_ready: false,
+        skipped_steps: [],
+        hint: "Address at index 1 selected",
+      });
 
       await locationService.selectAddress(1);
 
