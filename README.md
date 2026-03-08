@@ -1,5 +1,7 @@
 # blinkit-mcp
 
+[![CI](https://github.com/AmanVarshney01/blinkit-mcp/workflows/CI/badge.svg)](https://github.com/AmanVarshney01/blinkit-mcp/actions)
+
 An MCP (Model Context Protocol) server that wraps [blinkit.com](https://blinkit.com/) -- India's quick-commerce grocery delivery platform -- enabling AI assistants to search products, manage cart, and place orders.
 
 Blinkit has no public API. This server uses a hybrid approach: direct HTTP calls where possible, and Playwright browser automation as a fallback. Playwright runs in-process, managed by the BrowserManager class.
