@@ -75,8 +75,3 @@ export async function checkout(page: Page): Promise<{
     throw new Error("Proceed button not visible. Cart might be empty or store unavailable.");
   }
 }
-
-// ─── Re-exports for backward compatibility ───────────────────────────────────
-
-export { getPaymentMethods, selectPaymentMethod, payNow } from "./payment-flow.ts";
-export { getOrders, trackOrder } from "./order-flow.ts";
