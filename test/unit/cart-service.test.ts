@@ -2,6 +2,9 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 import { CartService } from "../../src/services/cart-service.ts";
 import type { AppContext } from "../../src/types.ts";
 import type { Page } from "playwright";
+import type { Logger } from "../../src/core/logger.ts";
+import type { BrowserManager } from "../../src/core/browser-manager.ts";
+import type { SpendingGuard } from "../../src/services/spending-guard.ts";
 
 // Mock the cart-flow module
 vi.mock("../../src/playwright/cart-flow.ts", () => ({
@@ -41,17 +44,17 @@ describe("CartService", () => {
         debug: vi.fn(),
         warn: vi.fn(),
         error: vi.fn(),
-      },
+      } as unknown as Logger,
       browserManager: {
         ensurePage: vi.fn(async () => mockPage),
-      },
+      } as unknown as BrowserManager,
       spendingGuard: {
         check: vi.fn((amount: number) => ({
           allowed: true,
           exceeded_hard_limit: false,
           warning: undefined,
         })),
-      },
+      } as unknown as SpendingGuard,
       config: {} as any,
       httpClient: {} as any,
       sessionManager: {} as any,
