@@ -1,6 +1,7 @@
 import type { Page } from "playwright";
-import { isStoreClosed, navigateToPaymentWidget } from "./helpers.ts";
+import { isStoreClosed, navigateToPaymentWidget, extractPrice } from "./helpers.ts";
 import { SELECTORS } from "./selectors.ts";
+import type { OrderDetails, OrderItem } from "../types.ts";
 import QRCode from "qrcode";
 
 function log(msg: string): void {
@@ -466,34 +467,192 @@ export async function payNow(page: Page): Promise<{ message: string }> {
   throw new Error("Could not find 'Pay Now' button. Make sure you are on the payment page and have selected a payment method.");
 }
 
+// ── Helper: batch-parse order cards from DOM in a single evaluate call ──
+async function batchParseOrderCards(page: Page, lim: number): Promise<OrderDetails[]> {
+  return page.evaluate((lim: number) => {
+    const doc = (globalThis as any).document;
+    const cards = doc.querySelectorAll("div[class*='OrderCard'], div[class*='order-card']");
+    const results: any[] = [];
+
+    for (let i = 0; i < cards.length && i < lim; i++) {
+      const card = cards[i];
+      const cardText = card.textContent || "";
+
+      // Extract order ID from data attributes or URL
+      let orderId = card.getAttribute("data-order-id") ||
+                    card.getAttribute("id") ||
+                    card.querySelector("a[href*='/order/']")?.getAttribute("href")?.match(/\/order\/([^/?]+)/)?.[1] ||
+                    `order-${i}`;
+
+      // Extract date
+      const dateEl = card.querySelector("div[class*='OrderDate'], span[class*='order-date'], div[class*='Date']");
+      const date = dateEl?.textContent?.trim() || "";
+
+      // Extract total
+      let total = 0;
+      const totalEl = card.querySelector("div[class*='OrderTotal'], span[class*='order-total'], div[class*='Total']");
+      if (totalEl) {
+        const totalText = totalEl.textContent || "";
+        const match = totalText.match(/[₹]?\s*([\d,]+(?:\.\d+)?)/);
+        if (match) {
+          total = parseFloat(match[1].replace(/,/g, "")) || 0;
+        }
+      }
+
+      // Extract status
+      const statusEl = card.querySelector("div[class*='OrderStatus'], span[class*='order-status'], div[class*='Status']");
+      const status = statusEl?.textContent?.trim() || "Unknown";
+
+      // Extract items from the order card
+      const items: any[] = [];
+
+      // Strategy 1: Look for item containers
+      const itemContainers = card.querySelectorAll(
+        "div[class*='OrderItem'], div[class*='order-item'], div[class*='ProductCard'], div[class*='CartProduct']"
+      );
+
+      if (itemContainers.length > 0) {
+        for (const itemEl of itemContainers) {
+          const itemText = itemEl.textContent || "";
+
+          // Extract product ID from data attributes
+          const productId = itemEl.getAttribute("data-product-id") ||
+                           itemEl.getAttribute("data-id") ||
+                           itemEl.querySelector("[data-product-id]")?.getAttribute("data-product-id") ||
+                           undefined;
+
+          // Extract name
+          const nameEl = itemEl.querySelector(
+            "div[class*='ProductTitle'], div[class*='product-name'], div[class*='Name'], div[class*='line-clamp']"
+          );
+          const name = nameEl?.textContent?.trim() || itemText.split("\n")[0]?.trim() || "Unknown Item";
+
+          // Extract quantity
+          let quantity = 1;
+          const qtyMatch = itemText.match(/(\d+)\s*x\s*/i) ||
+                          itemText.match(/qty:\s*(\d+)/i) ||
+                          itemText.match(/quantity:\s*(\d+)/i);
+          if (qtyMatch) {
+            quantity = parseInt(qtyMatch[1], 10) || 1;
+          }
+
+          // Extract price
+          let price = 0;
+          const priceEl = itemEl.querySelector("div[class*='Price'], span[class*='price']");
+          const priceText = priceEl?.textContent || itemText;
+          const priceMatch = priceText.match(/[₹]?\s*([\d,]+(?:\.\d+)?)/);
+          if (priceMatch) {
+            price = parseFloat(priceMatch[1].replace(/,/g, "")) || 0;
+          }
+
+          // Extract variant
+          const variantEl = itemEl.querySelector("div[class*='Variant'], div[class*='variant'], div[class*='Weight']");
+          const variant = variantEl?.textContent?.trim() || undefined;
+
+          // Extract image
+          const imgEl = itemEl.querySelector("img");
+          const imageUrl = imgEl?.getAttribute("src") || undefined;
+
+          if (name && name !== "Unknown Item") {
+            items.push({
+              product_id: productId,
+              name,
+              quantity,
+              original_price: price,
+              variant,
+              image_url: imageUrl,
+            });
+          }
+        }
+      } else {
+        // Strategy 2: Parse from card text (fallback when no item containers found)
+        // Look for patterns like "Product Name x 2" or "Product Name ₹100"
+        const lines = cardText.split("\n").filter((l: string) => l.trim());
+
+        for (const line of lines) {
+          // Skip lines that look like order metadata (status, date, total, etc.)
+          if (line.includes("Delivered") ||
+              line.includes("Pending") ||
+              line.includes("Cancelled") ||
+              line.match(/^\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i) ||
+              line.includes("Grand total") ||
+              line.includes("items") ||
+              line.length < 3) {
+            continue;
+          }
+
+          // Look for quantity pattern
+          const qtyMatch = line.match(/^(.+?)\s+(\d+)\s*x/i);
+          if (qtyMatch) {
+            const name = qtyMatch[1].trim();
+            const quantity = parseInt(qtyMatch[2], 10) || 1;
+
+            // Try to extract price from this line or nearby
+            const priceMatch = line.match(/[₹]?\s*([\d,]+(?:\.\d+)?)/);
+            const price = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, "")) || 0 : 0;
+
+            items.push({
+              name,
+              quantity,
+              original_price: price,
+            });
+          } else if (line.includes("₹")) {
+            // Line with price but no quantity indicator
+            const parts = line.split("₹");
+            if (parts.length >= 2) {
+              const name = parts[0].trim();
+              const priceMatch = parts[1].match(/([\d,]+(?:\.\d+)?)/);
+              const price = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, "")) || 0 : 0;
+
+              if (name.length > 2 && !name.match(/total|tax|fee|delivery/i)) {
+                items.push({
+                  name,
+                  quantity: 1,
+                  original_price: price,
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // Extract item count (from metadata or count of parsed items)
+      let itemCount = items.length;
+      const itemCountMatch = cardText.match(/(\d+)\s+items?/i);
+      if (itemCountMatch) {
+        itemCount = parseInt(itemCountMatch[1], 10) || items.length;
+      }
+
+      results.push({
+        order_id: orderId,
+        date,
+        total,
+        item_count: itemCount,
+        status,
+        items,
+      });
+    }
+
+    return results;
+  }, lim);
+}
+
 /**
- * Get order history.
+ * Get order history with detailed item information.
  */
-export async function getOrders(page: Page, limit: number): Promise<Array<Record<string, unknown>>> {
+export async function getOrders(page: Page, limit: number): Promise<OrderDetails[]> {
+  log(`Fetching order history (limit: ${limit})...`);
+
   await page.goto("https://blinkit.com/orders", {
     waitUntil: "domcontentloaded",
     timeout: 60000,
   });
   await page.waitForSelector(SELECTORS.ORDER_CARD, { timeout: 10000 }).catch(() => null);
 
-  const orders: Array<Record<string, unknown>> = [];
-  const orderCards = page.locator(SELECTORS.ORDER_CARD);
-  const orderCount = Math.min(await orderCards.count(), limit);
+  // Use batch parsing to extract detailed order information
+  const orders = await batchParseOrderCards(page, limit);
 
-  for (let i = 0; i < orderCount; i++) {
-    try {
-      const card = orderCards.nth(i);
-      const cardText = await card.innerText().catch(() => "");
-
-      orders.push({
-        order_id: `order-${i}`,
-        text: cardText.trim(),
-      });
-    } catch {
-      // Skip
-    }
-  }
-
+  log(`Extracted ${orders.length} orders with item details`);
   return orders;
 }
 
