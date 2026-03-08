@@ -140,9 +140,21 @@ export class ReorderService {
 
         // Check availability
         if (!matchedProduct.in_stock) {
+          // Find alternative in-stock products from search results
+          const alternatives = searchResults.products
+            .filter((p) => p.in_stock && p.id !== matchedProduct?.id)
+            .slice(0, 3)
+            .map((p) => ({
+              id: p.id,
+              name: p.name,
+              price: p.price,
+              in_stock: p.in_stock,
+            }));
+
           unavailableItems.push({
             name: orderItem.name,
             reason: "Out of stock",
+            alternatives: alternatives.length > 0 ? alternatives : undefined,
           });
           continue;
         }
@@ -218,9 +230,6 @@ export class ReorderService {
         });
       }
     }
-
-    // TODO: Implement subsequent steps in following subtasks:
-    // 4. Alternative product suggestions for unavailable items
 
     return {
       success: itemsAdded.length > 0,
