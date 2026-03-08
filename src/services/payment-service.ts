@@ -3,7 +3,7 @@ import {
   getPaymentMethods as getPaymentMethodsFlow,
   selectPaymentMethod as selectPaymentMethodFlow,
   payNow as payNowFlow,
-} from "../playwright/checkout-flow.ts";
+} from "../playwright/payment-flow.ts";
 
 export class PaymentService {
   private ctx: AppContext;
