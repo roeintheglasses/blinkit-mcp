@@ -4,6 +4,7 @@ import {
   getOrderDetails as getOrderDetailsFlow,
 } from "../playwright/checkout-flow.ts";
 import { ProductService } from "./product-service.ts";
+import { CartService } from "./cart-service.ts";
 
 export class ReorderService {
   private ctx: AppContext;
@@ -170,16 +171,64 @@ export class ReorderService {
       }
     }
 
+    // Step 3: Cart population with batch add
+    const cartService = new CartService(this.ctx);
+    const itemsAdded: Array<{
+      name: string;
+      quantity: number;
+      price: number;
+      price_changed?: boolean;
+      old_price?: number;
+    }> = [];
+
+    let finalCartTotal = 0;
+    let finalSpendingWarning: string | undefined;
+
+    for (const item of itemsToAdd) {
+      try {
+        const addResult = await cartService.addToCart(
+          item.product.id,
+          item.quantity
+        );
+
+        if (addResult.success) {
+          itemsAdded.push({
+            name: item.product.name,
+            quantity: addResult.quantity_added,
+            price: item.product.price,
+            price_changed: item.product.price !== item.original_price,
+            old_price:
+              item.product.price !== item.original_price
+                ? item.original_price
+                : undefined,
+          });
+
+          // Update cart total and spending warning from latest add operation
+          finalCartTotal = addResult.cart_total;
+          finalSpendingWarning = addResult.spending_warning;
+        }
+      } catch (error) {
+        this.ctx.logger.debug(
+          `Failed to add item ${item.product.name} to cart:`,
+          error
+        );
+        unavailableItems.push({
+          name: item.product.name,
+          reason: "Failed to add to cart",
+        });
+      }
+    }
+
     // TODO: Implement subsequent steps in following subtasks:
-    // 3. Cart population with batch add
     // 4. Alternative product suggestions for unavailable items
 
     return {
-      success: false,
-      items_added: [],
+      success: itemsAdded.length > 0,
+      items_added: itemsAdded,
       unavailable_items: unavailableItems,
       price_changes: priceChanges,
-      cart_total: 0,
+      cart_total: finalCartTotal,
+      spending_warning: finalSpendingWarning,
     };
   }
 }
