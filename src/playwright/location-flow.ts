@@ -1,10 +1,7 @@
 import type { Page } from "playwright";
 import { debugStep, isStoreClosed, navigateToPaymentWidget } from "./helpers.ts";
+import { log } from "./log.ts";
 import { SELECTORS } from "./selectors.ts";
-
-function log(msg: string): void {
-  process.stderr.write(`[playwright] ${msg}\n`);
-}
 
 /**
  * Set delivery location by searching for an address query.
