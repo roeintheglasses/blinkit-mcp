@@ -1,15 +1,12 @@
 import { describe, test, expect } from "vitest";
 import { SpendingGuard } from "../../src/services/spending-guard.ts";
+import { ConfigSchema } from "../../src/config/schema.ts";
 
 describe("SpendingGuard", () => {
-  const guard = new SpendingGuard({
+  const guard = new SpendingGuard(ConfigSchema.parse({
     warn_threshold: 500,
     max_order_amount: 2000,
-    headless: true,
-    debug: false,
-    slow_mo: 0,
-    screenshot_on_error: true,
-  });
+  }));
 
   test("allows under warning threshold", () => {
     const result = guard.check(200);
@@ -58,14 +55,10 @@ describe("SpendingGuard", () => {
   });
 
   test("uses custom thresholds", () => {
-    const customGuard = new SpendingGuard({
+    const customGuard = new SpendingGuard(ConfigSchema.parse({
       warn_threshold: 100,
       max_order_amount: 500,
-      headless: true,
-      debug: false,
-      slow_mo: 0,
-      screenshot_on_error: true,
-    });
+    }));
 
     expect(customGuard.check(50).warning).toBeUndefined();
     expect(customGuard.check(150).warning).toBeDefined();

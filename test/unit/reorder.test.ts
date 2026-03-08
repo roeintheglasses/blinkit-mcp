@@ -3,7 +3,7 @@ import { ReorderService } from "../../src/services/reorder-service.ts";
 import type { AppContext, OrderDetails, Product } from "../../src/types.ts";
 
 // Mock the dependencies
-vi.mock("../../src/playwright/checkout-flow.ts", () => ({
+vi.mock("../../src/playwright/order-flow.ts", () => ({
   getOrders: vi.fn(),
   getOrderDetails: vi.fn(),
 }));
@@ -19,7 +19,7 @@ vi.mock("../../src/services/cart-service.ts", () => ({
 import {
   getOrders as getOrdersFlow,
   getOrderDetails as getOrderDetailsFlow,
-} from "../../src/playwright/checkout-flow.ts";
+} from "../../src/playwright/order-flow.ts";
 import { ProductService } from "../../src/services/product-service.ts";
 import { CartService } from "../../src/services/cart-service.ts";
 

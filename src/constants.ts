@@ -36,6 +36,20 @@ export const TIMEOUTS = {
   HTTP_REQUEST: 15_000,
 } as const;
 
+export const CACHE = {
+  TTL_MS: 60_000, // 60 seconds
+  CLEANUP_INTERVAL_MS: 120_000, // 2 minutes
+} as const;
+
+export const RETRY_DEFAULTS = {
+  MAX_RETRIES: 3,
+  INITIAL_BACKOFF_MS: 1_000,
+  BACKOFF_MULTIPLIER: 2,
+  MAX_JITTER_MS: 500,
+  CIRCUIT_BREAKER_THRESHOLD: 5,
+  CIRCUIT_BREAKER_RESET_MS: 30_000,
+} as const;
+
 export const CONFIG_DIR = ".blinkit-mcp";
 export const AUTH_FILE = "auth.json";
 export const COOKIES_DIR = "cookies";

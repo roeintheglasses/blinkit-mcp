@@ -2,7 +2,7 @@ import type { AppContext, OrderDetails, Product } from "../types.ts";
 import {
   getOrders as getOrdersFlow,
   getOrderDetails as getOrderDetailsFlow,
-} from "../playwright/checkout-flow.ts";
+} from "../playwright/order-flow.ts";
 import { ProductService } from "./product-service.ts";
 import { CartService } from "./cart-service.ts";
 
