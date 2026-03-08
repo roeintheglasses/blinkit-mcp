@@ -1,19 +1,13 @@
 import { z } from "zod";
 import type { AppContext } from "../../types.ts";
 import { CartService } from "../../services/cart-service.ts";
+import { requireAuth } from "../../utils/auth-wrapper.ts";
 
 export const clearCartTool = {
   name: "clear_cart",
   description: "Empty the entire Blinkit cart. Requires authentication.",
   inputSchema: {},
-  handler: async (_input: {}, ctx: AppContext) => {
-    if (!ctx.sessionManager.isAuthenticated()) {
-      return {
-        content: [{ type: "text" as const, text: "Not logged in. Use the login tool with your phone number, then enter_otp to authenticate." }],
-        isError: true,
-      };
-    }
-
+  handler: requireAuth(async (_input: {}, ctx: AppContext) => {
     const cartService = new CartService(ctx);
     const result = await cartService.clearCart();
 
@@ -25,5 +19,5 @@ export const clearCartTool = {
         },
       ],
     };
-  },
+  }),
 };

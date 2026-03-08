@@ -9,9 +9,9 @@ export class RateLimiter {
   private minInterval: number;
 
   constructor(
-    capacity = RATE_LIMIT.BUCKET_CAPACITY,
-    refillRate = RATE_LIMIT.REFILL_RATE,
-    minInterval = RATE_LIMIT.MIN_INTERVAL_MS
+    capacity: number = RATE_LIMIT.BUCKET_CAPACITY,
+    refillRate: number = RATE_LIMIT.REFILL_RATE,
+    minInterval: number = RATE_LIMIT.MIN_INTERVAL_MS
   ) {
     this.capacity = capacity;
     this.refillRate = refillRate;
