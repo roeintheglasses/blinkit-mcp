@@ -33,6 +33,7 @@ import { getPaymentMethodsTool } from "./tools/orders/get-payment-methods.ts";
 import { selectPaymentMethodTool } from "./tools/orders/select-payment-method.ts";
 import { payNowTool } from "./tools/orders/pay-now.ts";
 import { quickUpiCheckoutTool } from "./tools/orders/quick-upi-checkout.ts";
+import { reorderTool } from "./tools/orders/reorder.ts";
 
 type ContentBlock =
   | { type: "text"; text: string }
@@ -72,6 +73,7 @@ const ALL_TOOLS: ToolDef[] = [
   selectPaymentMethodTool,
   payNowTool,
   quickUpiCheckoutTool,
+  reorderTool,
 ];
 
 export function createServer(ctx: AppContext): McpServer {
