@@ -173,6 +173,33 @@ export function extractPrice(text: string | null): number {
   return parseFloat(text.replace(/[^0-9.]/g, "")) || 0;
 }
 
+// ─── Event-driven wait helpers ───────────────────────────────────────────────
+
+/** Wait for a Blinkit cart API response after a cart-modifying action */
+export async function waitForCartUpdate(page: Page, timeout = 3000): Promise<boolean> {
+  const resp = await page.waitForResponse(
+    (resp) => resp.url().includes("/v6/cart/") && resp.status() === 200,
+    { timeout }
+  ).catch(() => null);
+  return resp !== null;
+}
+
+/** Wait for a condition to become true via page.waitForFunction, with debounce and timeout */
+export async function waitForConditionOrTimeout(
+  page: Page,
+  condition: string | (() => boolean),
+  opts: { timeout?: number; debounceMs?: number } = {}
+): Promise<boolean> {
+  const { timeout = 5000, debounceMs = 100 } = opts;
+  try {
+    await page.waitForFunction(condition, undefined, { timeout });
+    if (debounceMs > 0) await page.waitForTimeout(debounceMs);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ─── Generic utility helpers (preserved from original) ───────────────────────
 
 export async function waitAndClick(page: Page, selector: string, timeout = 10000): Promise<void> {
