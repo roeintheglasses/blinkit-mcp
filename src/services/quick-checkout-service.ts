@@ -1,10 +1,10 @@
 import type { AppContext } from "../types.ts";
 import { getCart as getCartFlow } from "../playwright/cart-flow.ts";
+import { checkout as checkoutFlow } from "../playwright/checkout-flow.ts";
 import {
-  checkout as checkoutFlow,
   getPaymentMethods as getPaymentMethodsFlow,
   selectPaymentMethod as selectPaymentMethodFlow,
-} from "../playwright/checkout-flow.ts";
+} from "../playwright/payment-flow.ts";
 import {
   getAddresses as getAddressesFlow,
   selectAddress as selectAddressFlow,
