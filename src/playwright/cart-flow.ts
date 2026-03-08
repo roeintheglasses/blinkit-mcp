@@ -1,11 +1,8 @@
 import type { Page } from "playwright";
 import { isStoreClosed, extractPrice, waitForCartUpdate } from "./helpers.ts";
+import { log } from "./log.ts";
 import { getKnownProducts, reSearchProduct } from "./search-flow.ts";
 import { SELECTORS, productById } from "./selectors.ts";
-
-function log(msg: string): void {
-  process.stderr.write(`[playwright] ${msg}\n`);
-}
 
 /**
  * Extract cart total from visible cart button or bill details.
