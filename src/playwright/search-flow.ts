@@ -40,7 +40,7 @@ export async function reSearchProduct(page: Page, sourceQuery: string): Promise<
         waitUntil: "domcontentloaded",
         timeout: 60000,
       });
-      await page.waitForTimeout(2000);
+      await page.waitForSelector(SELECTORS.PRODUCT_CARD_ADD, { timeout: 10000 }).catch(() => null);
       return;
     }
   }
@@ -52,7 +52,7 @@ export async function reSearchProduct(page: Page, sourceQuery: string): Promise<
     );
     if (searchInput) {
       await searchInput.fill(sourceQuery);
-      await page.waitForTimeout(300);
+      await page.waitForTimeout(150);
       await page.keyboard.press("Enter");
     }
   } catch {
@@ -65,7 +65,6 @@ export async function reSearchProduct(page: Page, sourceQuery: string): Promise<
   } catch {
     log("No product cards found during re-search");
   }
-  await page.waitForTimeout(1000);
 }
 
 // ── Helper: batch-parse product cards from DOM in a single evaluate call ──
