@@ -2,10 +2,7 @@ import type { Page } from "playwright";
 import { debugStep, extractPrice } from "./helpers.ts";
 import { SELECTORS } from "./selectors.ts";
 import type { Product } from "../types.ts";
-
-function log(msg: string): void {
-  process.stderr.write(`[playwright] ${msg}\n`);
-}
+import { log } from "./log.ts";
 
 // Known products tracking for cross-search cart recovery
 const knownProducts = new Map<string, { sourceQuery: string; name: string }>();
