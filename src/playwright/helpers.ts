@@ -119,7 +119,7 @@ export async function navigateToPaymentWidget(page: Page, timeoutMs = 20000): Pr
       if (await noTip.count() > 0) {
         await noTip.first().click();
         skippedSteps.push("delivery_tip_skipped");
-        await page.waitForTimeout(1000);
+        await page.waitForSelector(SELECTORS.PAYMENT_WIDGET, { timeout: 3000 }).catch(() => {});
         continue;
       }
       // Fallback: look for Proceed/Continue button
@@ -127,7 +127,7 @@ export async function navigateToPaymentWidget(page: Page, timeoutMs = 20000): Pr
       if (await proceedBtn.isVisible().catch(() => false)) {
         await proceedBtn.click();
         skippedSteps.push("delivery_tip_proceeded");
-        await page.waitForTimeout(1000);
+        await page.waitForSelector(SELECTORS.PAYMENT_WIDGET, { timeout: 3000 }).catch(() => {});
         continue;
       }
     }
@@ -138,7 +138,7 @@ export async function navigateToPaymentWidget(page: Page, timeoutMs = 20000): Pr
       await proceedToPay.last().click();
       skippedSteps.push("proceed_to_pay_clicked");
       log("Clicked 'Proceed to Pay'");
-      await page.waitForTimeout(2000);
+      await page.waitForSelector(SELECTORS.PAYMENT_WIDGET, { timeout: 5000 }).catch(() => {});
       continue;
     }
 
@@ -148,7 +148,7 @@ export async function navigateToPaymentWidget(page: Page, timeoutMs = 20000): Pr
       await genericProceed.click();
       skippedSteps.push("generic_proceed_clicked");
       log("Clicked generic Proceed/Continue button");
-      await page.waitForTimeout(1500);
+      await page.waitForSelector(SELECTORS.PAYMENT_WIDGET, { timeout: 3000 }).catch(() => {});
       continue;
     }
 
@@ -157,11 +157,11 @@ export async function navigateToPaymentWidget(page: Page, timeoutMs = 20000): Pr
     if (await closeBtn.count() > 0 && await closeBtn.first().isVisible().catch(() => false)) {
       await closeBtn.first().click();
       skippedSteps.push("modal_dismissed");
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(200);
       continue;
     }
 
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(200);
   }
 
   return { reached: false, skippedSteps };
