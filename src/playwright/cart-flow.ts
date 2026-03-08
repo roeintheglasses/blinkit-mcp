@@ -340,7 +340,7 @@ export async function updateCartItem(
       const minusBtn = card.locator(SELECTORS.ICON_MINUS).first();
       if (await minusBtn.count() === 0) break;
       await minusBtn.locator("..").click();
-      await page.waitForTimeout(500);
+      await waitForCartUpdate(page, 3000);
       if (await card.locator("div").filter({ hasText: "ADD" }).last().isVisible().catch(() => false)) {
         break;
       }
@@ -401,7 +401,7 @@ export async function removeFromCart(
     for (let i = 0; i < quantity; i++) {
       await minusClickable.click();
       log(`Decrementing quantity for ${productId} (${i + 1}/${quantity}).`);
-      await page.waitForTimeout(500);
+      await waitForCartUpdate(page, 3000);
 
       // If ADD button reappears, item is fully removed
       if (await card.locator("div").filter({ hasText: "ADD" }).last().isVisible().catch(() => false)) {
@@ -410,7 +410,7 @@ export async function removeFromCart(
       }
     }
 
-    await page.waitForTimeout(1000);
+    await waitForCartUpdate(page, 3000);
 
     // Extract actual cart total after removing items (optimization: avoids redundant getCart() call)
     const cart_total = await extractCartTotal(page);
@@ -428,7 +428,7 @@ export async function clearCart(page: Page): Promise<{ success: boolean; items_c
   const cartBtn = page.locator(SELECTORS.CART_BUTTON);
   if (await cartBtn.count() > 0) {
     await cartBtn.first().click();
-    await page.waitForTimeout(2000);
+    await page.waitForSelector(SELECTORS.CART_PRODUCT, { timeout: 5000 }).catch(() => null);
   }
 
   let removed = 0;
@@ -437,7 +437,7 @@ export async function clearCart(page: Page): Promise<{ success: boolean; items_c
     const btnCount = await minusBtns.count();
     if (btnCount === 0) break;
     await minusBtns.first().locator("..").click();
-    await page.waitForTimeout(500);
+    await waitForCartUpdate(page, 3000);
     removed++;
     if (removed > 100) break; // Safety limit
   }
