@@ -2,6 +2,19 @@ import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
 import { BlinkitHttpClient } from "../../src/core/http-client.ts";
 import { RateLimiter } from "../../src/core/rate-limiter.ts";
 import { Logger } from "../../src/core/logger.ts";
+import type { BlinkitConfig } from "../../src/config/schema.ts";
+
+const mockConfig: BlinkitConfig = {
+  warn_threshold: 500,
+  max_order_amount: 2000,
+  headless: true,
+  debug: false,
+  slow_mo: 0,
+  screenshot_on_error: true,
+  max_retries: 3,
+  backoff_multiplier: 2,
+  circuit_breaker_threshold: 5,
+};
 
 // Mock fetch globally
 const originalFetch = global.fetch;
@@ -16,7 +29,7 @@ describe("BlinkitHttpClient - Cache Integration", () => {
     // Create fast rate limiter for tests (no delays)
     rateLimiter = new RateLimiter(100, 1000, 0);
     logger = new Logger("error"); // Quiet logger for tests
-    client = new BlinkitHttpClient(rateLimiter, logger);
+    client = new BlinkitHttpClient(rateLimiter, logger, mockConfig);
 
     // Mock fetch
     fetchMock = vi.fn();
@@ -158,7 +171,7 @@ describe("BlinkitHttpClient - Cache Integration", () => {
     });
 
     // Create client with very short TTL (100ms)
-    const shortTtlClient = new BlinkitHttpClient(rateLimiter, logger);
+    const shortTtlClient = new BlinkitHttpClient(rateLimiter, logger, mockConfig);
     // Access private cache to set short TTL for testing
     (shortTtlClient as any).cache = new (await import("../../src/core/http-cache.ts")).HttpCache(100);
 
@@ -181,7 +194,7 @@ describe("BlinkitHttpClient - Cache Integration", () => {
   test("cache hit bypasses rate limiter delay", async () => {
     // Create slow rate limiter (200ms minimum interval)
     const slowRateLimiter = new RateLimiter(10, 10, 200);
-    const slowClient = new BlinkitHttpClient(slowRateLimiter, logger);
+    const slowClient = new BlinkitHttpClient(slowRateLimiter, logger, mockConfig);
 
     const mockResponse = { products: ["milk"] };
     fetchMock.mockResolvedValue({
