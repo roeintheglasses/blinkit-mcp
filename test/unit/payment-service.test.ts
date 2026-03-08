@@ -3,8 +3,8 @@ import { PaymentService } from "../../src/services/payment-service.ts";
 import type { AppContext } from "../../src/types.ts";
 import type { Page } from "playwright";
 
-// Mock the checkout-flow module
-vi.mock("../../src/playwright/checkout-flow.ts", () => ({
+// Mock the payment-flow module
+vi.mock("../../src/playwright/payment-flow.ts", () => ({
   getPaymentMethods: vi.fn(),
   selectPaymentMethod: vi.fn(),
   payNow: vi.fn(),
@@ -14,7 +14,7 @@ import {
   getPaymentMethods as getPaymentMethodsFlow,
   selectPaymentMethod as selectPaymentMethodFlow,
   payNow as payNowFlow,
-} from "../../src/playwright/checkout-flow.ts";
+} from "../../src/playwright/payment-flow.ts";
 
 describe("PaymentService", () => {
   let mockContext: AppContext;

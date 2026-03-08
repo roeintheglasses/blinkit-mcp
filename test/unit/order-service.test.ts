@@ -3,10 +3,12 @@ import { OrderService } from "../../src/services/order-service.ts";
 import type { AppContext, OrderSummary, OrderTracking } from "../../src/types.ts";
 import * as cartFlow from "../../src/playwright/cart-flow.ts";
 import * as checkoutFlow from "../../src/playwright/checkout-flow.ts";
+import * as orderFlow from "../../src/playwright/order-flow.ts";
 
 // Mock the playwright flows
 vi.mock("../../src/playwright/cart-flow.ts");
 vi.mock("../../src/playwright/checkout-flow.ts");
+vi.mock("../../src/playwright/order-flow.ts");
 
 describe("OrderService", () => {
   let mockContext: AppContext;
@@ -229,12 +231,12 @@ describe("OrderService", () => {
         },
       ];
 
-      vi.mocked(checkoutFlow.getOrders).mockResolvedValue(mockOrders as any);
+      vi.mocked(orderFlow.getOrders).mockResolvedValue(mockOrders as any);
 
       const result = await service.getOrderHistory();
 
       expect(mockContext.browserManager.ensurePage).toHaveBeenCalled();
-      expect(checkoutFlow.getOrders).toHaveBeenCalledWith(mockPage, 5);
+      expect(orderFlow.getOrders).toHaveBeenCalledWith(mockPage, 5);
       expect(result).toEqual(mockOrders);
       expect(result).toHaveLength(2);
     });
@@ -253,23 +255,23 @@ describe("OrderService", () => {
         },
       ];
 
-      vi.mocked(checkoutFlow.getOrders).mockResolvedValue(mockOrders as any);
+      vi.mocked(orderFlow.getOrders).mockResolvedValue(mockOrders as any);
 
       const result = await service.getOrderHistory(1);
 
-      expect(checkoutFlow.getOrders).toHaveBeenCalledWith(mockPage, 1);
+      expect(orderFlow.getOrders).toHaveBeenCalledWith(mockPage, 1);
       expect(result).toEqual(mockOrders);
     });
 
     test("handles empty order history", async () => {
       const service = new OrderService(mockContext);
 
-      vi.mocked(checkoutFlow.getOrders).mockResolvedValue([]);
+      vi.mocked(orderFlow.getOrders).mockResolvedValue([]);
 
       const result = await service.getOrderHistory();
 
       expect(mockContext.browserManager.ensurePage).toHaveBeenCalled();
-      expect(checkoutFlow.getOrders).toHaveBeenCalledWith(mockPage, 5);
+      expect(orderFlow.getOrders).toHaveBeenCalledWith(mockPage, 5);
       expect(result).toEqual([]);
       expect(result).toHaveLength(0);
     });
@@ -286,11 +288,11 @@ describe("OrderService", () => {
         items_summary: `Items ${i + 1}`,
       }));
 
-      vi.mocked(checkoutFlow.getOrders).mockResolvedValue(mockOrders as any);
+      vi.mocked(orderFlow.getOrders).mockResolvedValue(mockOrders as any);
 
       const result = await service.getOrderHistory(10);
 
-      expect(checkoutFlow.getOrders).toHaveBeenCalledWith(mockPage, 10);
+      expect(orderFlow.getOrders).toHaveBeenCalledWith(mockPage, 10);
       expect(result).toHaveLength(10);
     });
   });
@@ -310,12 +312,12 @@ describe("OrderService", () => {
         ],
       };
 
-      vi.mocked(checkoutFlow.trackOrder).mockResolvedValue(mockTracking as any);
+      vi.mocked(orderFlow.trackOrder).mockResolvedValue(mockTracking as any);
 
       const result = await service.trackOrder("ORD123");
 
       expect(mockContext.browserManager.ensurePage).toHaveBeenCalled();
-      expect(checkoutFlow.trackOrder).toHaveBeenCalledWith(mockPage, "ORD123");
+      expect(orderFlow.trackOrder).toHaveBeenCalledWith(mockPage, "ORD123");
       expect(result).toEqual(mockTracking);
       expect(result.order_id).toBe("ORD123");
       expect(result.status).toBe("out_for_delivery");
@@ -334,12 +336,12 @@ describe("OrderService", () => {
         ],
       };
 
-      vi.mocked(checkoutFlow.trackOrder).mockResolvedValue(mockTracking as any);
+      vi.mocked(orderFlow.trackOrder).mockResolvedValue(mockTracking as any);
 
       const result = await service.trackOrder();
 
       expect(mockContext.browserManager.ensurePage).toHaveBeenCalled();
-      expect(checkoutFlow.trackOrder).toHaveBeenCalledWith(mockPage, undefined);
+      expect(orderFlow.trackOrder).toHaveBeenCalledWith(mockPage, undefined);
       expect(result).toEqual(mockTracking);
     });
 
@@ -358,11 +360,11 @@ describe("OrderService", () => {
         ],
       };
 
-      vi.mocked(checkoutFlow.trackOrder).mockResolvedValue(mockTracking as any);
+      vi.mocked(orderFlow.trackOrder).mockResolvedValue(mockTracking as any);
 
       const result = await service.trackOrder("ORD789");
 
-      expect(checkoutFlow.trackOrder).toHaveBeenCalledWith(mockPage, "ORD789");
+      expect(orderFlow.trackOrder).toHaveBeenCalledWith(mockPage, "ORD789");
       expect(result.order_id).toBe("ORD789");
       expect(result.status).toBe("processing");
       expect(result.eta_minutes).toBe(30);
@@ -379,11 +381,11 @@ describe("OrderService", () => {
         timeline: [],
       };
 
-      vi.mocked(checkoutFlow.trackOrder).mockResolvedValue(mockTracking as any);
+      vi.mocked(orderFlow.trackOrder).mockResolvedValue(mockTracking as any);
 
       const result = await service.trackOrder("ORD999");
 
-      expect(checkoutFlow.trackOrder).toHaveBeenCalledWith(mockPage, "ORD999");
+      expect(orderFlow.trackOrder).toHaveBeenCalledWith(mockPage, "ORD999");
       expect(result.order_id).toBe("ORD999");
       expect(result.status).toBe("placed");
       expect(result.eta_minutes).toBeUndefined();
