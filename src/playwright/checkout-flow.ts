@@ -30,7 +30,7 @@ export async function checkout(page: Page): Promise<{
     if (await cartBtn.count() > 0) {
       await cartBtn.first().click();
       log("Clicked cart button.");
-      await page.waitForTimeout(2000);
+      await page.waitForSelector(SELECTORS.PROCEED_HAS_TEXT, { timeout: 5000 }).catch(() => null);
     } else {
       log("Could not find cart button.");
     }
@@ -40,7 +40,10 @@ export async function checkout(page: Page): Promise<{
   if (await proceedBtn.isVisible().catch(() => false)) {
     await proceedBtn.click();
     log("Cart checkout initiated.");
-    await page.waitForTimeout(3000);
+    await Promise.race([
+      page.waitForSelector(SELECTORS.SELECT_DELIVERY_ADDRESS, { timeout: 10000 }),
+      page.waitForSelector(SELECTORS.PAYMENT_WIDGET, { timeout: 10000 }),
+    ]).catch(() => null);
 
     // Detect what state we landed in
     if (await page.isVisible(SELECTORS.SELECT_DELIVERY_ADDRESS).catch(() => false)) {
@@ -376,7 +379,7 @@ export async function selectPaymentMethod(page: Page, methodType: string): Promi
   }
 
   await header.click();
-  await page.waitForTimeout(2000);
+  await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
 
   // Handle method-specific behavior
   if (methodType.toLowerCase() === "upi") {
@@ -385,7 +388,7 @@ export async function selectPaymentMethod(page: Page, methodType: string): Promi
     if (await generateQr.count() > 0 && await generateQr.first().isVisible().catch(() => false)) {
       await generateQr.first().click();
       log("Clicked 'Generate QR' for UPI payment");
-      await page.waitForTimeout(3000);
+      await frame.waitForSelector(SELECTORS.QR_WRAPPER + ', ' + SELECTORS.QR_DATA_IMAGE + ', ' + SELECTORS.CANVAS, { timeout: 10000 }).catch(() => null);
     }
 
     // Capture the QR code image, save to file, and generate text art
@@ -471,7 +474,7 @@ export async function getOrders(page: Page, limit: number): Promise<Array<Record
     waitUntil: "domcontentloaded",
     timeout: 60000,
   });
-  await page.waitForTimeout(3000);
+  await page.waitForSelector(SELECTORS.ORDER_CARD, { timeout: 10000 }).catch(() => null);
 
   const orders: Array<Record<string, unknown>> = [];
   const orderCards = page.locator(SELECTORS.ORDER_CARD);
@@ -503,12 +506,12 @@ export async function trackOrder(page: Page, orderId?: string): Promise<Record<s
     : "https://blinkit.com/orders";
 
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
-  await page.waitForTimeout(3000);
+  await page.waitForSelector(SELECTORS.ORDER_CARD, { timeout: 10000 }).catch(() => null);
 
   if (!orderId) {
     try {
       await page.locator(SELECTORS.ORDER_CARD).first().click();
-      await page.waitForTimeout(2000);
+      await page.waitForLoadState("domcontentloaded", { timeout: 10000 }).catch(() => {});
     } catch {
       throw new Error("No orders found");
     }

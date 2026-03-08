@@ -1,5 +1,5 @@
 import type { Page } from "playwright";
-import { isStoreClosed, extractPrice } from "./helpers.ts";
+import { isStoreClosed, extractPrice, waitForCartUpdate } from "./helpers.ts";
 import { getKnownProducts, reSearchProduct } from "./search-flow.ts";
 import { SELECTORS, productById } from "./selectors.ts";
 
@@ -120,12 +120,11 @@ export async function addToCart(
     log(`Clicked ADD for product ${productId} (1/${quantity}).`);
     itemsToAdd--;
     actualAdded++;
-    await page.waitForTimeout(800);
+    await page.waitForSelector(SELECTORS.ICON_PLUS_MINUS, { timeout: 5000 }).catch(() => null);
   }
 
   // Use increment button for remaining quantity (or all of it if already in cart)
   if (itemsToAdd > 0) {
-    if (!alreadyInCart) await page.waitForTimeout(500);
 
     // Find the + button — click the icon element directly (not parent)
     const plusIcon = card.locator(SELECTORS.ICON_PLUS).first();
@@ -142,7 +141,7 @@ export async function addToCart(
           await plusText.click();
           actualAdded++;
           log(`Incrementing via text + for ${productId} (${actualAdded}/${quantity}).`);
-          await page.waitForTimeout(500);
+          await waitForCartUpdate(page, 3000);
         }
       }
     } else {
@@ -168,12 +167,12 @@ export async function addToCart(
           // No limit message, continue
         }
 
-        await page.waitForTimeout(500);
+        await waitForCartUpdate(page, 3000);
       }
     }
   }
 
-  await page.waitForTimeout(1000);
+  await waitForCartUpdate(page, 3000);
 
   // Check for store unavailable modal after adding
   if (await page.isVisible(SELECTORS.STORE_UNAVAILABLE_MODAL).catch(() => false)) {
@@ -209,7 +208,7 @@ export async function getCart(page: Page): Promise<{
   const cartBtn = page.locator(SELECTORS.CART_BUTTON);
   if (await cartBtn.count() > 0) {
     await cartBtn.first().click();
-    await page.waitForTimeout(2000);
+    await page.waitForSelector(SELECTORS.CART_PRODUCT + ', ' + SELECTORS.BILL_DETAILS_REGEX, { timeout: 5000 }).catch(() => null);
   } else {
     return { ...emptyResult, warning: "Cart button not found." };
   }
@@ -341,7 +340,7 @@ export async function updateCartItem(
       const minusBtn = card.locator(SELECTORS.ICON_MINUS).first();
       if (await minusBtn.count() === 0) break;
       await minusBtn.locator("..").click();
-      await page.waitForTimeout(500);
+      await waitForCartUpdate(page, 3000);
       if (await card.locator("div").filter({ hasText: "ADD" }).last().isVisible().catch(() => false)) {
         break;
       }
@@ -402,7 +401,7 @@ export async function removeFromCart(
     for (let i = 0; i < quantity; i++) {
       await minusClickable.click();
       log(`Decrementing quantity for ${productId} (${i + 1}/${quantity}).`);
-      await page.waitForTimeout(500);
+      await waitForCartUpdate(page, 3000);
 
       // If ADD button reappears, item is fully removed
       if (await card.locator("div").filter({ hasText: "ADD" }).last().isVisible().catch(() => false)) {
@@ -411,7 +410,7 @@ export async function removeFromCart(
       }
     }
 
-    await page.waitForTimeout(1000);
+    await waitForCartUpdate(page, 3000);
 
     // Extract actual cart total after removing items (optimization: avoids redundant getCart() call)
     const cart_total = await extractCartTotal(page);
@@ -429,7 +428,7 @@ export async function clearCart(page: Page): Promise<{ success: boolean; items_c
   const cartBtn = page.locator(SELECTORS.CART_BUTTON);
   if (await cartBtn.count() > 0) {
     await cartBtn.first().click();
-    await page.waitForTimeout(2000);
+    await page.waitForSelector(SELECTORS.CART_PRODUCT, { timeout: 5000 }).catch(() => null);
   }
 
   let removed = 0;
@@ -438,7 +437,7 @@ export async function clearCart(page: Page): Promise<{ success: boolean; items_c
     const btnCount = await minusBtns.count();
     if (btnCount === 0) break;
     await minusBtns.first().locator("..").click();
-    await page.waitForTimeout(500);
+    await waitForCartUpdate(page, 3000);
     removed++;
     if (removed > 100) break; // Safety limit
   }

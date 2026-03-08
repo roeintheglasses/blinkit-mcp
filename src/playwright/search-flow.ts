@@ -40,7 +40,7 @@ export async function reSearchProduct(page: Page, sourceQuery: string): Promise<
         waitUntil: "domcontentloaded",
         timeout: 60000,
       });
-      await page.waitForTimeout(2000);
+      await page.waitForSelector(SELECTORS.PRODUCT_CARD_ADD, { timeout: 10000 }).catch(() => null);
       return;
     }
   }
@@ -52,7 +52,7 @@ export async function reSearchProduct(page: Page, sourceQuery: string): Promise<
     );
     if (searchInput) {
       await searchInput.fill(sourceQuery);
-      await page.waitForTimeout(300);
+      await page.waitForTimeout(150);
       await page.keyboard.press("Enter");
     }
   } catch {
@@ -65,7 +65,6 @@ export async function reSearchProduct(page: Page, sourceQuery: string): Promise<
   } catch {
     log("No product cards found during re-search");
   }
-  await page.waitForTimeout(1000);
 }
 
 // ── Helper: batch-parse product cards from DOM in a single evaluate call ──
@@ -287,7 +286,7 @@ export async function searchProducts(
       // Navigate to homepage if not already there
       if (!page.url().includes("blinkit.com")) {
         await page.goto("https://blinkit.com", { waitUntil: "domcontentloaded", timeout: 60000 });
-        await page.waitForTimeout(2000);
+        await page.waitForSelector(SELECTORS.SEARCH_LINK + ', ' + SELECTORS.SEARCH_PLACEHOLDER, { timeout: 10000 }).catch(() => null);
       }
 
       // Activate search bar
@@ -309,7 +308,7 @@ export async function searchProducts(
       );
       if (searchInput) {
         await searchInput.fill(query);
-        await page.waitForTimeout(300);
+        await page.waitForTimeout(150);
         await page.keyboard.press("Enter");
       }
 
@@ -347,7 +346,7 @@ export async function getProductDetails(page: Page, productId: string): Promise<
     waitUntil: "domcontentloaded",
     timeout: 60000,
   });
-  await page.waitForTimeout(2000);
+  await page.waitForSelector(SELECTORS.PRODUCT_DETAIL_NAME, { timeout: 10000 }).catch(() => null);
 
   const name = await page.locator(SELECTORS.PRODUCT_DETAIL_NAME).first().textContent().catch(() => null);
   const priceText = await page.locator(SELECTORS.PRODUCT_DETAIL_PRICE).first().textContent().catch(() => null);
@@ -379,7 +378,7 @@ export async function getProductDetails(page: Page, productId: string): Promise<
  */
 export async function browseCategories(page: Page): Promise<Array<{ id: string; name: string; icon_url?: string }>> {
   await page.goto("https://blinkit.com", { waitUntil: "domcontentloaded", timeout: 60000 });
-  await page.waitForTimeout(2000);
+  await page.waitForSelector(SELECTORS.CATEGORY_LINK, { timeout: 10000 }).catch(() => null);
 
   const categories: Array<{ id: string; name: string; icon_url?: string }> = [];
   const categoryLinks = page.locator(SELECTORS.CATEGORY_LINK);
@@ -419,7 +418,6 @@ export async function browseCategoryProducts(
     waitUntil: "domcontentloaded",
     timeout: 60000,
   });
-  await page.waitForTimeout(2000);
 
   try {
     await page.waitForSelector(SELECTORS.PRODUCT_CARD_ADD, { timeout: 15000 });

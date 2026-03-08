@@ -34,7 +34,7 @@ export async function debugHighlight(page: Page, selector: string, color = "red"
 export async function debugStep(page: Page, label: string): Promise<void> {
   if (!debugMode) return;
   log(`[DEBUG] ${label}`);
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(300); // reduced from 800ms — debug-only pause for human observation
 }
 
 // ─── Shared page helpers ─────────────────────────────────────────────────────
@@ -119,7 +119,7 @@ export async function navigateToPaymentWidget(page: Page, timeoutMs = 20000): Pr
       if (await noTip.count() > 0) {
         await noTip.first().click();
         skippedSteps.push("delivery_tip_skipped");
-        await page.waitForTimeout(1000);
+        await page.waitForSelector(SELECTORS.PAYMENT_WIDGET, { timeout: 3000 }).catch(() => {});
         continue;
       }
       // Fallback: look for Proceed/Continue button
@@ -127,7 +127,7 @@ export async function navigateToPaymentWidget(page: Page, timeoutMs = 20000): Pr
       if (await proceedBtn.isVisible().catch(() => false)) {
         await proceedBtn.click();
         skippedSteps.push("delivery_tip_proceeded");
-        await page.waitForTimeout(1000);
+        await page.waitForSelector(SELECTORS.PAYMENT_WIDGET, { timeout: 3000 }).catch(() => {});
         continue;
       }
     }
@@ -138,7 +138,7 @@ export async function navigateToPaymentWidget(page: Page, timeoutMs = 20000): Pr
       await proceedToPay.last().click();
       skippedSteps.push("proceed_to_pay_clicked");
       log("Clicked 'Proceed to Pay'");
-      await page.waitForTimeout(2000);
+      await page.waitForSelector(SELECTORS.PAYMENT_WIDGET, { timeout: 5000 }).catch(() => {});
       continue;
     }
 
@@ -148,7 +148,7 @@ export async function navigateToPaymentWidget(page: Page, timeoutMs = 20000): Pr
       await genericProceed.click();
       skippedSteps.push("generic_proceed_clicked");
       log("Clicked generic Proceed/Continue button");
-      await page.waitForTimeout(1500);
+      await page.waitForSelector(SELECTORS.PAYMENT_WIDGET, { timeout: 3000 }).catch(() => {});
       continue;
     }
 
@@ -157,11 +157,11 @@ export async function navigateToPaymentWidget(page: Page, timeoutMs = 20000): Pr
     if (await closeBtn.count() > 0 && await closeBtn.first().isVisible().catch(() => false)) {
       await closeBtn.first().click();
       skippedSteps.push("modal_dismissed");
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(200);
       continue;
     }
 
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(200);
   }
 
   return { reached: false, skippedSteps };
@@ -171,6 +171,33 @@ export async function navigateToPaymentWidget(page: Page, timeoutMs = 20000): Pr
 export function extractPrice(text: string | null): number {
   if (!text) return 0;
   return parseFloat(text.replace(/[^0-9.]/g, "")) || 0;
+}
+
+// ─── Event-driven wait helpers ───────────────────────────────────────────────
+
+/** Wait for a Blinkit cart API response after a cart-modifying action */
+export async function waitForCartUpdate(page: Page, timeout = 3000): Promise<boolean> {
+  const resp = await page.waitForResponse(
+    (resp) => resp.url().includes("/v6/cart/") && resp.status() === 200,
+    { timeout }
+  ).catch(() => null);
+  return resp !== null;
+}
+
+/** Wait for a condition to become true via page.waitForFunction, with debounce and timeout */
+export async function waitForConditionOrTimeout(
+  page: Page,
+  condition: string | (() => boolean),
+  opts: { timeout?: number; debounceMs?: number } = {}
+): Promise<boolean> {
+  const { timeout = 5000, debounceMs = 100 } = opts;
+  try {
+    await page.waitForFunction(condition, undefined, { timeout });
+    if (debounceMs > 0) await page.waitForTimeout(debounceMs);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ─── Generic utility helpers (preserved from original) ───────────────────────

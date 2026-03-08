@@ -37,7 +37,7 @@ export async function setLocation(
 
   const locInput = page.locator(SELECTORS.LOCATION_INPUT).first();
   await locInput.fill(locationName);
-  await page.waitForTimeout(1000);
+  await page.waitForSelector(SELECTORS.LOCATION_SEARCH_RESULT, { timeout: 5000 }).catch(() => null);
 
   // Select first result
   const firstResult = page.locator(SELECTORS.LOCATION_SEARCH_RESULT).first();
@@ -49,7 +49,7 @@ export async function setLocation(
   }
 
   // Wait for location update
-  await page.waitForTimeout(2000);
+  await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
 
   // Check if new location is unavailable
   if (await page.isVisible(SELECTORS.CURRENTLY_UNAVAILABLE).catch(() => false)) {
@@ -130,7 +130,7 @@ export async function selectAddress(
 
   await items.nth(index).click();
   log(`Clicked address at index ${index}. Navigating through intermediate steps...`);
-  await page.waitForTimeout(1500);
+  await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
 
   // Navigate through any intermediate screens (tip, proceed to pay, etc.)
   const navResult = await navigateToPaymentWidget(page, 15000);
