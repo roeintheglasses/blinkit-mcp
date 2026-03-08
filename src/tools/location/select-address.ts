@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AppContext } from "../../types.ts";
 import { LocationService } from "../../services/location-service.ts";
+import { requireAuth } from "../../utils/auth-wrapper.ts";
 
 export const selectAddressTool = {
   name: "select_address",
@@ -8,19 +9,12 @@ export const selectAddressTool = {
   inputSchema: {
     address_index: z.number().int().min(0),
   },
-  handler: async (input: { address_index: number }, ctx: AppContext) => {
-    if (!ctx.sessionManager.isAuthenticated()) {
-      return {
-        content: [{ type: "text" as const, text: "Not logged in. Use the login tool with your phone number, then enter_otp to authenticate." }],
-        isError: true,
-      };
-    }
-
+  handler: requireAuth(async (input: { address_index: number }, ctx: AppContext) => {
     const locationService = new LocationService(ctx);
     const message = await locationService.selectAddress(input.address_index);
 
     return {
       content: [{ type: "text" as const, text: message }],
     };
-  },
+  }),
 };
