@@ -1,15 +1,12 @@
 import type { Page } from "playwright";
 import { SELECTORS } from "./selectors.ts";
+import { log } from "./log.ts";
 
 /** Module-level debug mode flag — set this to enable debug helpers */
 export let debugMode = false;
 
 export function setDebugMode(enabled: boolean): void {
   debugMode = enabled;
-}
-
-function log(msg: string): void {
-  process.stderr.write(`[playwright] ${msg}\n`);
 }
 
 // ─── Debug helpers ───────────────────────────────────────────────────────────
