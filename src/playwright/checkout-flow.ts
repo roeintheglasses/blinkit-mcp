@@ -379,7 +379,7 @@ export async function selectPaymentMethod(page: Page, methodType: string): Promi
   }
 
   await header.click();
-  await page.waitForTimeout(2000);
+  await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
 
   // Handle method-specific behavior
   if (methodType.toLowerCase() === "upi") {
@@ -388,7 +388,7 @@ export async function selectPaymentMethod(page: Page, methodType: string): Promi
     if (await generateQr.count() > 0 && await generateQr.first().isVisible().catch(() => false)) {
       await generateQr.first().click();
       log("Clicked 'Generate QR' for UPI payment");
-      await page.waitForTimeout(3000);
+      await frame.waitForSelector(SELECTORS.QR_WRAPPER + ', ' + SELECTORS.QR_DATA_IMAGE + ', ' + SELECTORS.CANVAS, { timeout: 10000 }).catch(() => null);
     }
 
     // Capture the QR code image, save to file, and generate text art
