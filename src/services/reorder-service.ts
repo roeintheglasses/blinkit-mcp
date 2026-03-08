@@ -1,4 +1,8 @@
-import type { AppContext } from "../types.ts";
+import type { AppContext, OrderDetails } from "../types.ts";
+import {
+  getOrders as getOrdersFlow,
+  getOrderDetails as getOrderDetailsFlow,
+} from "../playwright/checkout-flow.ts";
 
 export class ReorderService {
   private ctx: AppContext;
@@ -37,9 +41,40 @@ export class ReorderService {
     cart_total: number;
     spending_warning?: string;
   }> {
-    // TODO: Implement reorder logic in subsequent subtasks
-    // This is a skeleton method to be filled in with:
-    // 1. Order retrieval (by ID or 'last')
+    // Step 1: Retrieve the target order (by ID or 'last')
+    const page = await this.ctx.browserManager.ensurePage();
+    let targetOrder: OrderDetails;
+
+    if (orderIdOrLast === "last") {
+      // Get the most recent order from history
+      const orders = await getOrdersFlow(page, 1);
+      if (orders.length === 0) {
+        throw new Error("No orders found in order history");
+      }
+      targetOrder = orders[0];
+    } else {
+      // Get specific order by ID
+      // First try to find it in recent history (more efficient)
+      const recentOrders = await getOrdersFlow(page, 10);
+      const foundOrder = recentOrders.find(
+        (order) => order.order_id === orderIdOrLast
+      );
+
+      if (foundOrder) {
+        targetOrder = foundOrder;
+      } else {
+        // Order not in recent history, fetch it directly
+        targetOrder = await getOrderDetailsFlow(page, orderIdOrLast);
+      }
+    }
+
+    if (!targetOrder.items || targetOrder.items.length === 0) {
+      throw new Error(
+        `Order ${targetOrder.order_id} has no items to reorder`
+      );
+    }
+
+    // TODO: Implement subsequent steps in following subtasks:
     // 2. Item search and availability checking
     // 3. Cart population with batch add
     // 4. Alternative product suggestions
