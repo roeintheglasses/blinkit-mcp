@@ -474,7 +474,7 @@ export async function getOrders(page: Page, limit: number): Promise<Array<Record
     waitUntil: "domcontentloaded",
     timeout: 60000,
   });
-  await page.waitForTimeout(3000);
+  await page.waitForSelector(SELECTORS.ORDER_CARD, { timeout: 10000 }).catch(() => null);
 
   const orders: Array<Record<string, unknown>> = [];
   const orderCards = page.locator(SELECTORS.ORDER_CARD);
@@ -506,12 +506,12 @@ export async function trackOrder(page: Page, orderId?: string): Promise<Record<s
     : "https://blinkit.com/orders";
 
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
-  await page.waitForTimeout(3000);
+  await page.waitForSelector(SELECTORS.ORDER_CARD, { timeout: 10000 }).catch(() => null);
 
   if (!orderId) {
     try {
       await page.locator(SELECTORS.ORDER_CARD).first().click();
-      await page.waitForTimeout(2000);
+      await page.waitForLoadState("domcontentloaded", { timeout: 10000 }).catch(() => {});
     } catch {
       throw new Error("No orders found");
     }
