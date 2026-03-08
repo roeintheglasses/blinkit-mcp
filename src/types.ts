@@ -59,6 +59,24 @@ export interface OrderSummary {
   items_summary: string;
 }
 
+export interface OrderItem {
+  product_id?: string;
+  name: string;
+  quantity: number;
+  original_price: number;
+  variant?: string;
+  image_url?: string;
+}
+
+export interface OrderDetails {
+  order_id: string;
+  date: string;
+  total: number;
+  item_count: number;
+  status: string;
+  items: OrderItem[];
+}
+
 export interface OrderTracking {
   order_id: string;
   status: string;
