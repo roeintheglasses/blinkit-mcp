@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AppContext } from "../../types.ts";
 import { OrderService } from "../../services/order-service.ts";
+import { requireAuth } from "../../utils/auth-wrapper.ts";
 
 export const trackOrderTool = {
   name: "track_order",
@@ -9,14 +10,7 @@ export const trackOrderTool = {
   inputSchema: {
     order_id: z.string().optional(),
   },
-  handler: async (input: { order_id?: string }, ctx: AppContext) => {
-    if (!ctx.sessionManager.isAuthenticated()) {
-      return {
-        content: [{ type: "text" as const, text: "Not logged in. Use the login tool with your phone number, then enter_otp to authenticate." }],
-        isError: true,
-      };
-    }
-
+  handler: requireAuth(async (input: { order_id?: string }, ctx: AppContext) => {
     const orderService = new OrderService(ctx);
     const tracking = await orderService.trackOrder(input.order_id);
 
@@ -28,5 +22,5 @@ export const trackOrderTool = {
         },
       ],
     };
-  },
+  }),
 };

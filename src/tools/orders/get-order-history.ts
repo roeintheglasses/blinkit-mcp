@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AppContext } from "../../types.ts";
 import { OrderService } from "../../services/order-service.ts";
+import { requireAuth } from "../../utils/auth-wrapper.ts";
 
 export const getOrderHistoryTool = {
   name: "get_order_history",
@@ -8,14 +9,7 @@ export const getOrderHistoryTool = {
   inputSchema: {
     limit: z.number().int().min(1).max(20).default(5),
   },
-  handler: async (input: { limit: number }, ctx: AppContext) => {
-    if (!ctx.sessionManager.isAuthenticated()) {
-      return {
-        content: [{ type: "text" as const, text: "Not logged in. Use the login tool with your phone number, then enter_otp to authenticate." }],
-        isError: true,
-      };
-    }
-
+  handler: requireAuth(async (input: { limit: number }, ctx: AppContext) => {
     const orderService = new OrderService(ctx);
     const orders = await orderService.getOrderHistory(input.limit);
 
@@ -27,5 +21,5 @@ export const getOrderHistoryTool = {
         },
       ],
     };
-  },
+  }),
 };

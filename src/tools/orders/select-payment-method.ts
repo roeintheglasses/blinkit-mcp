@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AppContext } from "../../types.ts";
 import { PaymentService } from "../../services/payment-service.ts";
+import { requireAuth } from "../../utils/auth-wrapper.ts";
 
 export const selectPaymentMethodTool = {
   name: "select_payment_method",
@@ -8,14 +9,7 @@ export const selectPaymentMethodTool = {
   inputSchema: {
     method_type: z.string().min(1).describe("Payment method type: 'card', 'upi', 'netbanking', 'wallets', 'cod', or 'pay_later'"),
   },
-  handler: async (input: { method_type: string }, ctx: AppContext) => {
-    if (!ctx.sessionManager.isAuthenticated()) {
-      return {
-        content: [{ type: "text" as const, text: "Not logged in. Use the login tool with your phone number, then enter_otp to authenticate." }],
-        isError: true,
-      };
-    }
-
+  handler: requireAuth(async (input: { method_type: string }, ctx: AppContext) => {
     const paymentService = new PaymentService(ctx);
     const result = await paymentService.selectPaymentMethod(input.method_type);
 
@@ -49,5 +43,5 @@ export const selectPaymentMethodTool = {
     content.push({ type: "text" as const, text });
 
     return { content };
-  },
+  }),
 };

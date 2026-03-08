@@ -1,18 +1,12 @@
 import type { AppContext } from "../../types.ts";
 import { QuickCheckoutService } from "../../services/quick-checkout-service.ts";
+import { requireAuth } from "../../utils/auth-wrapper.ts";
 
 export const quickUpiCheckoutTool = {
   name: "quick_upi_checkout",
   description: "Performs the entire checkout flow in one call: opens cart, proceeds to checkout, auto-selects first address if needed, reaches payment, selects UPI, and returns the QR code.",
   inputSchema: {},
-  handler: async (_input: {}, ctx: AppContext) => {
-    if (!ctx.sessionManager.isAuthenticated()) {
-      return {
-        content: [{ type: "text" as const, text: "Not logged in. Use the login tool with your phone number, then enter_otp to authenticate." }],
-        isError: true,
-      };
-    }
-
+  handler: requireAuth(async (_input: {}, ctx: AppContext) => {
     const service = new QuickCheckoutService(ctx);
     const result = await service.quickUpiCheckout();
 
@@ -66,5 +60,5 @@ export const quickUpiCheckoutTool = {
     content.push({ type: "text" as const, text });
 
     return { content };
-  },
+  }),
 };

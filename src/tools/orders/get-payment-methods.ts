@@ -1,18 +1,12 @@
 import type { AppContext } from "../../types.ts";
 import { PaymentService } from "../../services/payment-service.ts";
+import { requireAuth } from "../../utils/auth-wrapper.ts";
 
 export const getPaymentMethodsTool = {
   name: "get_payment_methods",
   description: "Get available payment methods (cards, UPI, netbanking, etc.) from the checkout payment page. Use after checkout to see how to pay.",
   inputSchema: {},
-  handler: async (_input: {}, ctx: AppContext) => {
-    if (!ctx.sessionManager.isAuthenticated()) {
-      return {
-        content: [{ type: "text" as const, text: "Not logged in. Use the login tool with your phone number, then enter_otp to authenticate." }],
-        isError: true,
-      };
-    }
-
+  handler: requireAuth(async (_input: {}, ctx: AppContext) => {
     const paymentService = new PaymentService(ctx);
     const result = await paymentService.getPaymentMethods();
 
@@ -32,5 +26,5 @@ export const getPaymentMethodsTool = {
     return {
       content: [{ type: "text" as const, text: `Available payment methods:\n${lines.join("\n")}\n\nUse select_payment_method with the type (e.g. "card", "upi") to select one.` }],
     };
-  },
+  }),
 };
