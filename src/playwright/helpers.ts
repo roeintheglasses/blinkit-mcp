@@ -34,7 +34,7 @@ export async function debugHighlight(page: Page, selector: string, color = "red"
 export async function debugStep(page: Page, label: string): Promise<void> {
   if (!debugMode) return;
   log(`[DEBUG] ${label}`);
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(300); // reduced from 800ms — debug-only pause for human observation
 }
 
 // ─── Shared page helpers ─────────────────────────────────────────────────────
