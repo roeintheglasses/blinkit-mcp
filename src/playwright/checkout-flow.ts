@@ -30,7 +30,7 @@ export async function checkout(page: Page): Promise<{
     if (await cartBtn.count() > 0) {
       await cartBtn.first().click();
       log("Clicked cart button.");
-      await page.waitForTimeout(2000);
+      await page.waitForSelector(SELECTORS.PROCEED_HAS_TEXT, { timeout: 5000 }).catch(() => null);
     } else {
       log("Could not find cart button.");
     }
@@ -40,7 +40,10 @@ export async function checkout(page: Page): Promise<{
   if (await proceedBtn.isVisible().catch(() => false)) {
     await proceedBtn.click();
     log("Cart checkout initiated.");
-    await page.waitForTimeout(3000);
+    await Promise.race([
+      page.waitForSelector(SELECTORS.SELECT_DELIVERY_ADDRESS, { timeout: 10000 }),
+      page.waitForSelector(SELECTORS.PAYMENT_WIDGET, { timeout: 10000 }),
+    ]).catch(() => null);
 
     // Detect what state we landed in
     if (await page.isVisible(SELECTORS.SELECT_DELIVERY_ADDRESS).catch(() => false)) {
