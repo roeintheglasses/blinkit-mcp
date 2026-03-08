@@ -54,7 +54,7 @@ describe("LocationService", () => {
   describe("setLocation", () => {
     test("sets location with address query", async () => {
       const addressQuery = "123 Main St, Delhi";
-      vi.mocked(setLocationFlow).mockResolvedValue(undefined);
+      vi.mocked(setLocationFlow).mockResolvedValue({ location_set: true });
 
       const result = await locationService.setLocation({
         address_query: addressQuery,
@@ -93,7 +93,7 @@ describe("LocationService", () => {
 
       for (const address of addresses) {
         vi.clearAllMocks();
-        vi.mocked(setLocationFlow).mockResolvedValue(undefined);
+        vi.mocked(setLocationFlow).mockResolvedValue({ location_set: true });
 
         const result = await locationService.setLocation({
           address_query: address,
@@ -107,7 +107,7 @@ describe("LocationService", () => {
     });
 
     test("ensures browser page before setting location", async () => {
-      vi.mocked(setLocationFlow).mockResolvedValue(undefined);
+      vi.mocked(setLocationFlow).mockResolvedValue({ location_set: true });
 
       await locationService.setLocation({ address_query: "Test Address" });
 
