@@ -657,6 +657,196 @@ export async function getOrders(page: Page, limit: number): Promise<OrderDetails
 }
 
 /**
+ * Get full details for a specific order by navigating to its page.
+ * Extracts comprehensive item information including product IDs, variants, and images.
+ */
+export async function getOrderDetails(page: Page, orderId: string): Promise<OrderDetails> {
+  log(`Fetching details for order ${orderId}...`);
+
+  await page.goto(`https://blinkit.com/order/${orderId}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+
+  // Wait for page content to load
+  await page.waitForTimeout(2000);
+
+  // Extract order details from the page
+  const orderDetails = await page.evaluate((oid: string) => {
+    const doc = (globalThis as any).document;
+    const bodyText = doc.body.textContent || "";
+
+    // Extract order metadata
+    let orderId = oid;
+
+    // Extract date - look for date patterns
+    let date = "";
+    const dateMatch = bodyText.match(/(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})/i) ||
+                     bodyText.match(/(\d{1,2}\/\d{1,2}\/\d{4})/);
+    if (dateMatch) {
+      date = dateMatch[1];
+    }
+
+    // Extract total - look for grand total or order total
+    let total = 0;
+    const totalEl = doc.querySelector("div[class*='Total'], div[class*='total'], div[class*='GrandTotal']");
+    if (totalEl) {
+      const totalText = totalEl.textContent || "";
+      const match = totalText.match(/[₹]?\s*([\d,]+(?:\.\d+)?)/);
+      if (match) {
+        total = parseFloat(match[1].replace(/,/g, "")) || 0;
+      }
+    }
+    // Fallback: search in body text for "Grand total" or "Order total"
+    if (total === 0) {
+      const totalMatch = bodyText.match(/(?:Grand\s+total|Order\s+total|Total)[:\s]*[₹]?\s*([\d,]+(?:\.\d+)?)/i);
+      if (totalMatch) {
+        total = parseFloat(totalMatch[1].replace(/,/g, "")) || 0;
+      }
+    }
+
+    // Extract status
+    let status = "Unknown";
+    const statusEl = doc.querySelector("div[class*='Status'], span[class*='status']");
+    if (statusEl) {
+      status = statusEl.textContent?.trim() || "Unknown";
+    } else if (bodyText.includes("Delivered")) {
+      status = "Delivered";
+    } else if (bodyText.includes("Cancelled")) {
+      status = "Cancelled";
+    } else if (bodyText.includes("Pending")) {
+      status = "Pending";
+    }
+
+    // Extract items from the order page
+    const items: any[] = [];
+
+    // Strategy 1: Look for item containers (product cards, order items, cart items)
+    const itemContainers = doc.querySelectorAll(
+      "div[class*='OrderItem'], div[class*='order-item'], div[class*='ProductCard'], div[class*='product-card'], " +
+      "div[class*='CartProduct'], div[class*='cart-product'], div[class*='Item']"
+    );
+
+    if (itemContainers.length > 0) {
+      for (const itemEl of itemContainers) {
+        const itemText = itemEl.textContent || "";
+
+        // Skip if this looks like a section header or empty container
+        if (itemText.length < 5 || itemText.includes("Total") || itemText.includes("Delivery")) {
+          continue;
+        }
+
+        // Extract product ID from data attributes
+        const productId = itemEl.getAttribute("data-product-id") ||
+                         itemEl.getAttribute("data-id") ||
+                         itemEl.querySelector("[data-product-id]")?.getAttribute("data-product-id") ||
+                         itemEl.querySelector("[data-id]")?.getAttribute("data-id") ||
+                         undefined;
+
+        // Extract name - try multiple selectors
+        const nameEl = itemEl.querySelector(
+          "div[class*='ProductTitle'], div[class*='product-title'], div[class*='ProductName'], " +
+          "div[class*='product-name'], div[class*='Name'], div[class*='name'], div[class*='line-clamp']"
+        );
+        let name = nameEl?.textContent?.trim() || "";
+
+        // Fallback: use first line of text
+        if (!name) {
+          const lines = itemText.split("\n").filter((l: string) => l.trim());
+          name = lines[0]?.trim() || "Unknown Item";
+        }
+
+        // Extract quantity
+        let quantity = 1;
+        const qtyMatch = itemText.match(/(\d+)\s*x\s*/i) ||
+                        itemText.match(/qty[:\s]*(\d+)/i) ||
+                        itemText.match(/quantity[:\s]*(\d+)/i);
+        if (qtyMatch) {
+          quantity = parseInt(qtyMatch[1], 10) || 1;
+        }
+
+        // Extract price
+        let price = 0;
+        const priceEl = itemEl.querySelector("div[class*='Price'], div[class*='price'], span[class*='Price'], span[class*='price']");
+        const priceText = priceEl?.textContent || itemText;
+        const priceMatch = priceText.match(/[₹]?\s*([\d,]+(?:\.\d+)?)/);
+        if (priceMatch) {
+          price = parseFloat(priceMatch[1].replace(/,/g, "")) || 0;
+        }
+
+        // Extract variant (weight, size, etc.)
+        const variantEl = itemEl.querySelector(
+          "div[class*='Variant'], div[class*='variant'], div[class*='Weight'], " +
+          "div[class*='weight'], div[class*='Size'], span[class*='variant']"
+        );
+        const variant = variantEl?.textContent?.trim() || undefined;
+
+        // Extract image URL
+        const imgEl = itemEl.querySelector("img");
+        const imageUrl = imgEl?.getAttribute("src") || imgEl?.getAttribute("data-src") || undefined;
+
+        // Only add if we have a valid name
+        if (name && name !== "Unknown Item" && name.length > 2) {
+          items.push({
+            product_id: productId,
+            name,
+            quantity,
+            original_price: price,
+            variant,
+            image_url: imageUrl,
+          });
+        }
+      }
+    }
+
+    // Strategy 2: If no items found, try parsing from structured lists
+    if (items.length === 0) {
+      const listItems = doc.querySelectorAll("li, div[role='listitem']");
+      for (const li of listItems) {
+        const liText = li.textContent || "";
+
+        // Look for patterns like "Product Name x 2 ₹100"
+        const qtyPriceMatch = liText.match(/^(.+?)\s+(\d+)\s*x\s*[₹]?\s*([\d,]+(?:\.\d+)?)/i);
+        if (qtyPriceMatch) {
+          const name = qtyPriceMatch[1].trim();
+          const quantity = parseInt(qtyPriceMatch[2], 10) || 1;
+          const price = parseFloat(qtyPriceMatch[3].replace(/,/g, "")) || 0;
+
+          const imgEl = li.querySelector("img");
+          const imageUrl = imgEl?.getAttribute("src") || undefined;
+
+          items.push({
+            name,
+            quantity,
+            original_price: price,
+            image_url: imageUrl,
+          });
+        }
+      }
+    }
+
+    // Extract item count (from metadata or count of parsed items)
+    let itemCount = items.length;
+    const itemCountMatch = bodyText.match(/(\d+)\s+items?/i);
+    if (itemCountMatch) {
+      itemCount = parseInt(itemCountMatch[1], 10) || items.length;
+    }
+
+    return {
+      order_id: orderId,
+      date,
+      total,
+      item_count: itemCount,
+      status,
+      items,
+    };
+  }, orderId);
+
+  log(`Extracted order details with ${orderDetails.items.length} items`);
+  return orderDetails;
+}
+
+/**
  * Track a specific order or the most recent one.
  */
 export async function trackOrder(page: Page, orderId?: string): Promise<Record<string, unknown>> {
