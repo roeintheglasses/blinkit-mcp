@@ -37,10 +37,10 @@ describe("LocationService", () => {
         debug: vi.fn(),
         warn: vi.fn(),
         error: vi.fn(),
-      },
+      } as unknown as AppContext["logger"],
       browserManager: {
         ensurePage: vi.fn(async () => mockPage),
-      },
+      } as unknown as AppContext["browserManager"],
       config: {} as any,
       httpClient: {} as any,
       sessionManager: {} as any,
