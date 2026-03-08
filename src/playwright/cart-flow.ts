@@ -208,7 +208,7 @@ export async function getCart(page: Page): Promise<{
   const cartBtn = page.locator(SELECTORS.CART_BUTTON);
   if (await cartBtn.count() > 0) {
     await cartBtn.first().click();
-    await page.waitForTimeout(2000);
+    await page.waitForSelector(SELECTORS.CART_PRODUCT + ', ' + SELECTORS.BILL_DETAILS_REGEX, { timeout: 5000 }).catch(() => null);
   } else {
     return { ...emptyResult, warning: "Cart button not found." };
   }
