@@ -1,10 +1,10 @@
 import type { AppContext, OrderSummary, OrderTracking } from "../types.ts";
 import { getCart as getCartFlow } from "../playwright/cart-flow.ts";
+import { checkout as checkoutFlow } from "../playwright/checkout-flow.ts";
 import {
-  checkout as checkoutFlow,
   getOrders as getOrdersFlow,
   trackOrder as trackOrderFlow,
-} from "../playwright/checkout-flow.ts";
+} from "../playwright/order-flow.ts";
 
 export class OrderService {
   private ctx: AppContext;
