@@ -1,6 +1,9 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { AuthService } from "../../src/services/auth-service.ts";
 import type { AppContext } from "../../src/types.ts";
+import type { Logger } from "../../src/core/logger.ts";
+import type { BrowserManager } from "../../src/core/browser-manager.ts";
+import type { SessionManager } from "../../src/core/session-manager.ts";
 import type { Page, BrowserContext } from "playwright";
 
 // Mock the playwright helpers and auth-flow modules
@@ -46,7 +49,7 @@ describe("AuthService", () => {
         debug: vi.fn(),
         warn: vi.fn(),
         error: vi.fn(),
-      },
+      } as unknown as Logger,
       browserManager: {
         isRunning: vi.fn(() => false),
         getStorageStatePath: vi.fn(() => "/mock/path/storage.json"),
@@ -54,7 +57,7 @@ describe("AuthService", () => {
         saveStorageState: vi.fn(async () => {}),
         close: vi.fn(async () => {}),
         getContext: vi.fn(async () => mockBrowserContext),
-      },
+      } as unknown as BrowserManager,
       sessionManager: {
         isAuthenticated: vi.fn(() => false),
         getPhone: vi.fn(() => null),
@@ -67,7 +70,7 @@ describe("AuthService", () => {
           logged_in: false,
         })),
         setLocation: vi.fn(),
-      },
+      } as unknown as SessionManager,
       config: {} as any,
       httpClient: {} as any,
       rateLimiter: {} as any,

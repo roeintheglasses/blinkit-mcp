@@ -57,9 +57,8 @@ describe("OrderService", () => {
 
       // Mock successful checkout
       const mockCheckoutResult = {
-        success: true,
-        order_id: "ORD123",
-        total: 200,
+        next_step: "payment",
+        message: "Checkout initiated. Payment page is ready. Use get_payment_methods to see available options.",
       };
       vi.mocked(checkoutFlow.checkout).mockResolvedValue(mockCheckoutResult);
 
@@ -88,9 +87,8 @@ describe("OrderService", () => {
 
       // Mock successful checkout
       const mockCheckoutResult = {
-        success: true,
-        order_id: "ORD456",
-        total: 750,
+        next_step: "payment",
+        message: "Checkout initiated. Payment page is ready. Use get_payment_methods to see available options.",
       };
       vi.mocked(checkoutFlow.checkout).mockResolvedValue(mockCheckoutResult);
 
@@ -98,7 +96,7 @@ describe("OrderService", () => {
 
       expect(mockContext.spendingGuard.check).toHaveBeenCalledWith(750);
       expect(checkoutFlow.checkout).toHaveBeenCalledWith(mockPage);
-      expect(result.success).toBe(true);
+      expect(result.next_step).toBe("payment");
       expect(result.spending_warning).toBeDefined();
       expect(result.spending_warning).toContain("750");
       expect(result.spending_warning).toContain("500");
@@ -138,9 +136,8 @@ describe("OrderService", () => {
 
       // Mock successful checkout
       const mockCheckoutResult = {
-        success: true,
-        order_id: "ORD789",
-        total: 300,
+        next_step: "payment",
+        message: "Checkout initiated. Payment page is ready. Use get_payment_methods to see available options.",
       };
       vi.mocked(checkoutFlow.checkout).mockResolvedValue(mockCheckoutResult);
 
@@ -166,9 +163,8 @@ describe("OrderService", () => {
       });
 
       const mockCheckoutResult = {
-        success: true,
-        order_id: "ORD999",
-        total: 2000,
+        next_step: "payment",
+        message: "Checkout initiated. Payment page is ready. Use get_payment_methods to see available options.",
       };
       vi.mocked(checkoutFlow.checkout).mockResolvedValue(mockCheckoutResult);
 
@@ -176,7 +172,7 @@ describe("OrderService", () => {
 
       expect(mockContext.spendingGuard.check).toHaveBeenCalledWith(2000);
       expect(checkoutFlow.checkout).toHaveBeenCalledWith(mockPage);
-      expect(result.success).toBe(true);
+      expect(result.next_step).toBe("payment");
       // At 2000, it's allowed but should still warn (2000 > 500)
       expect(result.spending_warning).toBeDefined();
     });
@@ -195,7 +191,7 @@ describe("OrderService", () => {
       });
 
       const mockCheckoutResult = {
-        success: true,
+        next_step: "unknown",
         message: "Cart is empty",
       };
       vi.mocked(checkoutFlow.checkout).mockResolvedValue(mockCheckoutResult);
